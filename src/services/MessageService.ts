@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import Message from '../models/Message';
 import Redis from 'ioredis';
 import { redisClient } from '../config/redis';
+import { Server as SocketServer } from 'socket.io';
 
 export interface IMessage {
   channelId: Types.ObjectId;
@@ -14,39 +15,37 @@ export interface IMessage {
 }
 
 export class MessageService {
-  // private redis: Redis;
+  private static instance: MessageService;
+  private redis: Redis;
+  private static io: SocketServer;
 
-  // constructor() {
-  //   this.redis = redisClient;
-  // }
+  private constructor() {
+    this.redis = redisClient;
+  }
 
-  // async createMessage(messageData: IMessage): Promise<any> {
-  //   try {
-  //     // Create message in MongoDB
-  //     const message = new Message(messageData);
-  //     await message.save();
+  public static getInstance(): MessageService {
+    if (!MessageService.instance) {
+      throw new Error('MessageService must be initialized with Socket.IO before use');
+    }
+    return MessageService.instance;
+  }
 
-  //     // Cache message in Redis
-  //     const cacheKey = `channel:messages:${messageData.channelId}`;
-  //     await this.redis.lpush(cacheKey, JSON.stringify(message));
-  //     await this.redis.ltrim(cacheKey, 0, 99); // Keep last 100 messages
-
-  //     // Publish message event
-  //     await this.redis.publish('messages.new', JSON.stringify(message));
-
-  //     return message;
-  //   } catch (error) {
-  //     console.error('Error creating message:', error);
-  //     throw error;
-  //   }
-  // }
+  public static initialize(io: SocketServer): MessageService {
+    if (!MessageService.instance) {
+      MessageService.io = io;
+      MessageService.instance = new MessageService();
+    }
+    return MessageService.instance;
+  }
 
   async createMessage(channelId: string, messageData: IMessage): Promise<any> {
     const message = await Message.create({ 
         ...messageData, 
         channelId: new Types.ObjectId(channelId)
     });
-    
+    MessageService.io.to(`channel:${channelId}`).emit('message:new', message);
+
+    this.redis.publish('messages.new', JSON.stringify(message));
     return Message.findById(message._id)
         .populate('user', 'displayName avatarUrl');
   }
@@ -125,4 +124,8 @@ export class MessageService {
   }
 }
 
-export default new MessageService();
+export const initializeMessageService = (io: SocketServer): MessageService => {
+    return MessageService.initialize(io);
+};
+
+export default MessageService;

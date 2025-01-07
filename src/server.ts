@@ -2,93 +2,128 @@ import express, { Application } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
-import { Socket } from 'socket.io';
 import mongoose from 'mongoose';
 import { Redis } from 'ioredis';
 import { KubeMQClient } from 'kubemq-js';
+import { createAdapter } from '@socket.io/redis-adapter';
 import dotenv from 'dotenv';
-dotenv.config();
+import { SOCKET_EVENTS } from './socketio/events';
+import { initializeMessageService } from './services/MessageService';
+
 // Route Imports
 import userRoutes from './routes/userRoutes';
 import messageRoutes from './routes/messageRoutes';
 import channelRoutes from './routes/channelRoutes';
 import workspaceRoutes from './routes/workspaceRoutes';
 import reactionRoutes from './routes/reactionRoutes';
+
 // Middleware Imports
 import { errorHandler } from './middleware/errorHandler';
 import { authenticate } from './middleware/auth';
 import { rateLimiter } from './middleware/rateLimiter';
 
+dotenv.config();
+
 class Server {
   private app: Application;
   private httpServer: any;
-  private io: SocketServer;
-  private redis: Redis;
-  private kubemq: KubeMQClient;
+  private io!: SocketServer;
+  private redis!: Redis;
+  private kubemq!: KubeMQClient;
 
   constructor() {
     this.app = express();
     this.httpServer = createServer(this.app);
-    this.io = new SocketServer(this.httpServer, {
-      cors: {
-        origin: process.env.FRONTEND_URL,
-        methods: ['GET', 'POST']
-      }
-    });
-
-    // Initialize these properties
-    this.redis = new Redis();
-    this.kubemq = new KubeMQClient({
-      address: process.env.KUBEMQ_ADDRESS || '',
-      clientId: `server-${process.env.POD_NAME || 'main'}`
-    });
-    
-    
     this.configureMiddleware();
     this.configureRoutes();
-    this.configureSockets();
-    this.initializeServices();
+    this.initializeServices().then(() => {
+      this.configureSocketIO();
+      this.configureSockets(); // Move this after Redis initialization
+      console.log('Services initialized');
+    }).catch(error => {
+      console.error('Failed to initialize services:', error);
+      process.exit(1);
+    });
+  }
+
+  private configureSocketIO(): void {
+    this.io = new SocketServer(this.httpServer, {
+      cors: {
+        origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+        methods: ['GET', 'POST'],
+        credentials: true
+      },
+      pingTimeout: 60000,
+      pingInterval: 25000,
+      maxHttpBufferSize: 1e6 // 1 MB
+    });
+    
+    // Initialize MessageService with Socket.IO instance
+    initializeMessageService(this.io);
+    
+    // Setup Redis adapter for Socket.IO
+    if (this.redis) {
+      const pubClient = this.redis.duplicate();
+      const subClient = this.redis.duplicate();
+      this.io.adapter(createAdapter(pubClient, subClient));
+    }
   }
 
   private configureMiddleware(): void {
-
-    // Express middleware
     this.app.use(cors());
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
     this.app.use(rateLimiter);
-    
-    // Global error handler
     this.app.use(errorHandler);
   }
 
   private configureRoutes(): void {
-    // API routes
     this.app.use('/api/users', authenticate, userRoutes);
     this.app.use('/api/messages', authenticate, messageRoutes);
     this.app.use('/api/channels', authenticate, channelRoutes);
     this.app.use('/api/workspaces', authenticate, workspaceRoutes);
     this.app.use('/api', authenticate, reactionRoutes);
-    console.log("setpu the app")
 
-    // Health check route
     this.app.get('/health', (req, res) => {
       res.status(200).json({ status: 'healthy' });
     });
   }
 
   private configureSockets(): void {
-    this.io.on('connection', (socket) => {
+    // Setup Redis adapter for Socket.IO
+    const pubClient = this.redis.duplicate();
+    const subClient = this.redis.duplicate();
+    this.io.adapter(createAdapter(pubClient, subClient));
+
+    this.io.on('connection', async (socket) => {
       console.log('Client connected:', socket.id);
 
-      socket.on('join_channel', (channelId: string) => {
-        socket.join(channelId);
-        console.log(`Socket ${socket.id} joined channel ${channelId}`);
+      // Authenticate socket connection
+      const token = socket.handshake.auth.token;
+      if (!token) {
+        socket.disconnect();
+        return;
+      }
+
+      // Handle workspace events
+      socket.on(SOCKET_EVENTS.WORKSPACE.JOIN, (workspaceId: string) => {
+        socket.join(`workspace:${workspaceId}`);
+        console.log('Joined workspace:', workspaceId);
       });
 
-      socket.on('leave_channel', (channelId: string) => {
-        socket.leave(channelId);
-        console.log(`Socket ${socket.id} left channel ${channelId}`);
+      socket.on(SOCKET_EVENTS.CHANNEL.JOIN, (channelId: string) => {
+        socket.join(`channel:${channelId}`);
+        console.log('Joined channel:', channelId);
+      });
+
+      socket.on(SOCKET_EVENTS.CHANNEL.LEAVE, (channelId: string) => {
+        socket.leave(`channel:${channelId}`);
+        console.log('Left channel:', channelId);
+      });
+
+      socket.on(SOCKET_EVENTS.WORKSPACE.LEAVE, (workspaceId: string) => {
+        socket.leave(`workspace:${workspaceId}`);
+        console.log('Left workspace:', workspaceId);
       });
 
       socket.on('disconnect', () => {
@@ -122,6 +157,18 @@ class Server {
     }
   }
 
+  public getIO(): SocketServer {
+    return this.io;
+  }
+
+  public emitToWorkspace(workspaceId: string, event: string, data: any): void {
+    this.io.to(`workspace:${workspaceId}`).emit(event, data);
+  }
+
+  public emitToChannel(channelId: string, event: string, data: any): void {
+    this.io.to(`channel:${channelId}`).emit(event, data);
+  }
+
   public async start(): Promise<void> {
     try {
       const port = process.env.PORT || 3000;
@@ -129,7 +176,6 @@ class Server {
       this.httpServer.listen(port, () => {
         console.log(`Server running on port ${port}`);
       });
-
     } catch (error) {
       console.error('Failed to start server:', error);
       process.exit(1);
@@ -138,14 +184,10 @@ class Server {
 
   public async shutdown(): Promise<void> {
     try {
-      // Close database connections
       await mongoose.connection.close();
       await this.redis.quit();
       await this.kubemq.close();
-
-      // Close server
       this.httpServer.close();
-
       console.log('Server shut down successfully');
     } catch (error) {
       console.error('Error during shutdown:', error);
@@ -154,8 +196,15 @@ class Server {
   }
 }
 
-// Create and start server instance
+// Create server instance
 const server = new Server();
+
+// Export socket instance for use in other parts of the application
+export const socketServer = {
+  io: server.getIO(),
+  emitToWorkspace: server.emitToWorkspace.bind(server),
+  emitToChannel: server.emitToChannel.bind(server)
+};
 
 // Handle graceful shutdown
 process.on('SIGTERM', async () => {

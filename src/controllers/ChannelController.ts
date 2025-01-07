@@ -4,7 +4,7 @@ import ChannelService from '../services/ChannelService';
 import UserService from '../services/UserService';
 import { Types } from 'mongoose';
 import WorkspaceService from '../services/WorkspaceService';
-import MessageService from '../services/MessageService';
+import MessageService from "../services/MessageService";
 
 export class ChannelController {
     static createChannel: RequestHandler = async (req, res, next): Promise<void> => {
@@ -69,7 +69,7 @@ export class ChannelController {
       static getChannelMessages: RequestHandler = async (req, res, next): Promise<void> => {
         try {
           const { channelId } = req.params;
-          const messages = await MessageService.getMessagesByChannelId(channelId);
+          const messages = await MessageService.getInstance().getMessagesByChannelId(channelId);
           res.json(messages);
         } catch (error) {
           next(error);

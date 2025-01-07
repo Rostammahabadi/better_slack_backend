@@ -5,9 +5,13 @@ import UserService from "../services/UserService";
 
 export class MessageController {
     static createMessage: RequestHandler = async (req, res, next): Promise<void> => {
-        const { channelId } = req.params;
-        const message = await MessageService.createMessage(channelId, req.body);
-        res.json(message);
+        try {
+            const { channelId } = req.params;
+            const message = await MessageService.getInstance().createMessage(channelId, req.body);
+            res.json(message);
+        } catch (error) {
+            next(error);
+        }
     }
 
     static createMessageReaction: RequestHandler = async (req, res, next): Promise<void> => {
