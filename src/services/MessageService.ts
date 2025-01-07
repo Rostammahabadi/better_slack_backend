@@ -54,7 +54,8 @@ export class MessageService {
   async getMessagesByChannelId(channelId: string): Promise<any[]> {
     return Message.find({ channelId: new Types.ObjectId(channelId) })
       .sort({ createdAt: -1 })
-      .populate('user', 'username displayName avatarUrl')
+      .populate('user', '_id username displayName avatarUrl')
+      .populate('reactions', '_id emoji user')
       .exec();
   }
 
@@ -71,7 +72,8 @@ export class MessageService {
       return await Message.find(query)
         .sort({ createdAt: -1 })
         .limit(limit)
-        .populate('user', 'username displayName avatarUrl')
+        .populate('user', '_id username displayName avatarUrl')
+        .populate('reactions', '_id emoji user')
         .exec();
     } catch (error) {
       console.error('Error fetching messages:', error);

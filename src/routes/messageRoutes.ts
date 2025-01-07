@@ -1,5 +1,6 @@
 // src/routes/messageRoutes.ts
 import { Router } from 'express';
+import { MessageController } from '../controllers/MessageController';
 const router = Router();
 
 // Add your message routes here

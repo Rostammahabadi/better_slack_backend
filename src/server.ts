@@ -13,6 +13,7 @@ import userRoutes from './routes/userRoutes';
 import messageRoutes from './routes/messageRoutes';
 import channelRoutes from './routes/channelRoutes';
 import workspaceRoutes from './routes/workspaceRoutes';
+import reactionRoutes from './routes/reactionRoutes';
 // Middleware Imports
 import { errorHandler } from './middleware/errorHandler';
 import { authenticate } from './middleware/auth';
@@ -67,6 +68,7 @@ class Server {
     this.app.use('/api/messages', authenticate, messageRoutes);
     this.app.use('/api/channels', authenticate, channelRoutes);
     this.app.use('/api/workspaces', authenticate, workspaceRoutes);
+    this.app.use('/api', authenticate, reactionRoutes);
     console.log("setpu the app")
 
     // Health check route

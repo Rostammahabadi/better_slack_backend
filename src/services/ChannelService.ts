@@ -53,6 +53,13 @@ class ChannelService {
           select: 'username displayName avatarUrl'
         }
       })
+      .populate({
+        path: 'messages',
+        populate: {
+          path: 'reactions',
+          select: 'emoji user'
+        }
+      })
       .sort({ createdAt: -1 });
     } catch (error) {
       throw error;
@@ -68,6 +75,13 @@ class ChannelService {
         populate: {
           path: 'user',
           select: 'username displayName avatarUrl'
+        }
+      })
+      .populate({
+        path: 'messages',
+        populate: {
+          path: 'reactions',
+          select: 'emoji user'
         }
       });
   }

@@ -56,13 +56,6 @@ const MessageSchema = new Schema({
     enum: ['sent', 'delivered', 'read'],
     default: 'sent'
   },
-  reactions: [{
-    emoji: String,
-    userId: { 
-      type: Schema.Types.ObjectId, 
-      ref: 'User' 
-    }
-  }],
   edited: {
     type: Boolean,
     default: false
@@ -75,12 +68,21 @@ const MessageSchema = new Schema({
     }
   }]
 }, {
-  timestamps: true
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+MessageSchema.virtual('reactions', {
+  ref: 'Reaction',
+  localField: '_id',
+  foreignField: 'messageId',
+  options: { sort: { createdAt: 1 } }
 });
 
 // Indexes for query optimization
 MessageSchema.index({ channelId: 1, createdAt: -1 });
 MessageSchema.index({ threadId: 1, createdAt: 1 });
-MessageSchema.index({ senderId: 1 });
+MessageSchema.index({ user: 1 }); // Changed from senderId to user to match schema
 
 export default mongoose.model<IMessage>('Message', MessageSchema);
