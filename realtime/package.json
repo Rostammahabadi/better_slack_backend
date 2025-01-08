@@ -1,0 +1,28 @@
+{
+    "name": "better-slack-realtime",
+    "version": "1.0.0",
+    "main": "src/server.ts",
+    "scripts": {
+      "start": "node dist/server.js",
+      "dev": "nodemon src/server.ts",
+      "build": "tsc",
+      "test": "jest"
+    },
+    "dependencies": {
+      "socket.io": "^4.6.0",
+      "ioredis": "^5.3.0",
+      "@socket.io/redis-adapter": "^8.0.0",
+      "dotenv": "^16.0.3",
+      "typescript": "^4.9.5"
+    },
+    "devDependencies": {
+      "@types/node": "^18.15.0",
+      "@types/socket.io": "^3.0.2",
+      "nodemon": "^2.0.21",
+      "ts-node": "^10.9.1",
+      "jest": "^29.5.0",
+      "@types/jest": "^29.5.0",
+      "ts-jest": "^29.1.0"
+    }
+  }
+  
