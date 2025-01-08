@@ -20,7 +20,7 @@ import reactionRoutes from './routes/reactionRoutes';
 // Middleware Imports
 import { errorHandler } from './middleware/errorHandler';
 import { authenticate } from './middleware/auth';
-import { rateLimiter } from './middleware/rateLimiter';
+import { rateLimiter, messageRateLimiter } from './middleware/rateLimiter';
 
 dotenv.config();
 
@@ -205,15 +205,14 @@ class Server {
     this.app.use(cors());
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
-    this.app.use(rateLimiter);
     this.app.use(errorHandler);
   }
 
   private configureRoutes(): void {
-    this.app.use('/api/users', authenticate, userRoutes);
-    this.app.use('/api/messages', authenticate, messageRoutes);
-    this.app.use('/api/channels', authenticate, channelRoutes);
-    this.app.use('/api/workspaces', authenticate, workspaceRoutes);
+    this.app.use('/api/users', authenticate, userRoutes, rateLimiter);
+    this.app.use('/api/messages', authenticate, messageRoutes, messageRateLimiter);
+    this.app.use('/api/channels', authenticate, channelRoutes, rateLimiter);
+    this.app.use('/api/workspaces', authenticate, workspaceRoutes, rateLimiter);
     this.app.use('/api', authenticate, reactionRoutes);
 
     this.app.get('/health', (req, res) => {
