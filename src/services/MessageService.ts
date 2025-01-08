@@ -43,11 +43,25 @@ export class MessageService {
         ...messageData, 
         channelId: new Types.ObjectId(channelId)
     });
-    MessageService.io.to(`channel:${channelId}`).emit('message:new', message);
 
-    this.redis.publish('messages.new', JSON.stringify(message));
-    return Message.findById(message._id)
-        .populate('user', 'displayName avatarUrl');
+    // Populate the message with user and reaction data before emitting
+    const populatedMessage = await Message.findById(message._id)
+        .populate('user', '_id username displayName avatarUrl')
+        .populate('reactions', '_id emoji user');
+
+    // Emit to all clients in the channel
+    MessageService.io.to(`channel:${channelId}`).emit('message:new', {
+        type: 'NEW_MESSAGE',
+        payload: populatedMessage
+    });
+
+    // Publish to Redis for other server instances
+    this.redis.publish('messages.new', JSON.stringify({
+        type: 'NEW_MESSAGE',
+        payload: populatedMessage
+    }));
+
+    return populatedMessage;
   }
 
   async getMessagesByChannelId(channelId: string): Promise<any[]> {
@@ -56,6 +70,11 @@ export class MessageService {
       .populate('user', '_id username displayName avatarUrl')
       .populate('reactions', '_id emoji user')
       .exec();
+  }
+
+  async updateMessage(messageId: string, messageData: IMessage): Promise<any> {
+    const message = await Message.findByIdAndUpdate(messageId, messageData, { new: true });
+    return message;
   }
 
   async getChannelMessages(

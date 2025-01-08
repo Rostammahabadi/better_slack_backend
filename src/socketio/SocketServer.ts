@@ -36,6 +36,12 @@ export class SocketServer {
       // Authenticate socket connection
       this.authenticateConnection(socket);
 
+      socket.on('channel:broadcast_message', (message) => {
+        // Just broadcast the message since it's already saved
+        console.log('Broadcasting message:', message);
+        socket.to(message.channelId).emit('channel:message', message);
+      });
+
       // Handle workspace events
       socket.on('join:workspace', (workspaceId) => {
         socket.join(`workspace:${workspaceId}`);

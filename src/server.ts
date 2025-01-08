@@ -1,14 +1,14 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import { createServer } from 'http';
-import { Server as SocketServer } from 'socket.io';
+import { Socket, Server as SocketServer } from 'socket.io';
 import mongoose from 'mongoose';
 import { Redis } from 'ioredis';
 import { KubeMQClient } from 'kubemq-js';
 import { createAdapter } from '@socket.io/redis-adapter';
 import dotenv from 'dotenv';
 import { SOCKET_EVENTS } from './socketio/events';
-import { initializeMessageService } from './services/MessageService';
+import MessageService, { IMessage, initializeMessageService } from './services/MessageService';
 
 // Route Imports
 import userRoutes from './routes/userRoutes';
@@ -38,7 +38,6 @@ class Server {
     this.configureRoutes();
     this.initializeServices().then(() => {
       this.configureSocketIO();
-      this.configureSockets(); // Move this after Redis initialization
       console.log('Services initialized');
     }).catch(error => {
       console.error('Failed to initialize services:', error);
@@ -50,14 +49,16 @@ class Server {
     this.io = new SocketServer(this.httpServer, {
       cors: {
         origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-        methods: ['GET', 'POST'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
         credentials: true
       },
       pingTimeout: 60000,
       pingInterval: 25000,
       maxHttpBufferSize: 1e6 // 1 MB
     });
-    
+    const channels = new Map(); // Store channel info and members
+    const userSessions = new Map(); // Track which channels a user is in
+
     // Initialize MessageService with Socket.IO instance
     initializeMessageService(this.io);
     
@@ -66,6 +67,137 @@ class Server {
       const pubClient = this.redis.duplicate();
       const subClient = this.redis.duplicate();
       this.io.adapter(createAdapter(pubClient, subClient));
+
+      // Subscribe to Redis message events
+      subClient.subscribe('messages.new', (err) => {
+        if (err) {
+          console.error('Failed to subscribe to messages.new:', err);
+          return;
+        }
+        console.log('Subscribed to messages.new channel');
+      });
+
+      // Handle incoming Redis messages
+      subClient.on('message', (channel, message) => {
+        if (channel === 'messages.new') {
+          try {
+            const data = JSON.parse(message);
+            const { payload } = data;
+            // Broadcast to all clients in the channel
+            this.io.to(`channel:${payload.channelId}`).emit('message:new', data);
+          } catch (error) {
+            console.error('Error handling Redis message:', error);
+          }
+        }
+      });
+    }
+
+    // Handle socket connections
+    this.io.on('connection', async (socket) => {
+      console.log('Client connected:', socket.id);
+
+      // Authenticate socket connection
+      const token = socket.handshake.auth.token;
+      if (!token) {
+        socket.disconnect();
+        return;
+      }
+
+      // Join message rooms
+      socket.on('channel:join', (channelId: string, userId: string) => {
+        const roomName = `channel:${channelId}`;
+        socket.join(roomName);
+        
+        if (!channels.has(channelId)) {
+          channels.set(channelId, new Map());
+        }
+        
+        channels.get(channelId).set(socket.id, {
+          userId,
+          status: 'online'
+        });
+        
+        if (!userSessions.has(socket.id)) {
+          userSessions.set(socket.id, new Set());
+        }
+        userSessions.get(socket.id).add(channelId);
+        
+        const channelMembers = Array.from(channels.get(channelId).values());
+        
+        // Use the roomName when emitting
+        this.io.to(roomName).emit('channel:users', channelMembers);
+        this.io.to(roomName).emit('channel:user_joined', {
+          userId,
+          channelId
+        });
+        
+        console.log(`Socket ${socket.id} joined ${roomName}`);
+      });
+
+      socket.on('channel:message', async (message) => {
+        try {
+          console.log('Received message:', message);
+          const roomName = `channel:${message.channelId}`;
+          // Broadcast to everyone in the channel including sender
+          this.io.to(roomName).emit('channel:message', message);
+        } catch (error) {
+          socket.emit('error', {
+            message: 'Failed to save message',
+            error: error.message
+          });
+        }
+      });
+      socket.on('channel:typing', ({ channelId, isTyping }) => {
+        const channel = channels.get(channelId);
+        if (channel && channel.has(socket.id)) {
+          const user = channel.get(socket.id);
+          socket.to(channelId).emit('channel:typing', {
+            userId: socket.id,
+            username: user.username,
+            isTyping
+          });
+        }
+      });
+    
+      // Handle leaving a channel
+      socket.on('channel:leave', ({ channelId }) => {
+        handleChannelLeave(socket, channelId);
+      });
+    
+      // Handle disconnection
+      socket.on('disconnect', () => {
+        // Clean up all channels the user was in
+        if (userSessions.has(socket.id)) {
+          const userChannels = userSessions.get(socket.id);
+          userChannels.forEach(channelId => {
+            handleChannelLeave(socket, channelId);
+          });
+          userSessions.delete(socket.id);
+        }
+      });
+    });
+
+    function handleChannelLeave(socket: Socket, channelId: string) {
+      const channel = channels.get(channelId);
+      if (channel) {
+        const user = channel.get(socket.id);
+        if (user) {
+          channel.delete(socket.id);
+          socket.leave(channelId);
+          
+          // If channel is empty, remove it
+          if (channel.size === 0) {
+            channels.delete(channelId);
+          } else {
+            // Notify remaining channel members
+            this.io.to(channelId).emit('channel:user_left', {
+              userId: socket.id,
+              username: user.username
+            });
+            this.io.to(channelId).emit('channel:users', Array.from(channel.values()));
+          }
+        }
+      }
     }
   }
 
@@ -86,49 +218,6 @@ class Server {
 
     this.app.get('/health', (req, res) => {
       res.status(200).json({ status: 'healthy' });
-    });
-  }
-
-  private configureSockets(): void {
-    // Setup Redis adapter for Socket.IO
-    const pubClient = this.redis.duplicate();
-    const subClient = this.redis.duplicate();
-    this.io.adapter(createAdapter(pubClient, subClient));
-
-    this.io.on('connection', async (socket) => {
-      console.log('Client connected:', socket.id);
-
-      // Authenticate socket connection
-      const token = socket.handshake.auth.token;
-      if (!token) {
-        socket.disconnect();
-        return;
-      }
-
-      // Handle workspace events
-      socket.on(SOCKET_EVENTS.WORKSPACE.JOIN, (workspaceId: string) => {
-        socket.join(`workspace:${workspaceId}`);
-        console.log('Joined workspace:', workspaceId);
-      });
-
-      socket.on(SOCKET_EVENTS.CHANNEL.JOIN, (channelId: string) => {
-        socket.join(`channel:${channelId}`);
-        console.log('Joined channel:', channelId);
-      });
-
-      socket.on(SOCKET_EVENTS.CHANNEL.LEAVE, (channelId: string) => {
-        socket.leave(`channel:${channelId}`);
-        console.log('Left channel:', channelId);
-      });
-
-      socket.on(SOCKET_EVENTS.WORKSPACE.LEAVE, (workspaceId: string) => {
-        socket.leave(`workspace:${workspaceId}`);
-        console.log('Left workspace:', workspaceId);
-      });
-
-      socket.on('disconnect', () => {
-        console.log('Client disconnected:', socket.id);
-      });
     });
   }
 
@@ -186,7 +275,7 @@ class Server {
     try {
       await mongoose.connection.close();
       await this.redis.quit();
-      await this.kubemq.close();
+      this.kubemq.close();
       this.httpServer.close();
       console.log('Server shut down successfully');
     } catch (error) {

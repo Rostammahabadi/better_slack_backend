@@ -29,4 +29,14 @@ export class MessageController {
             next(error);
         }
     }
+
+    static updateMessage: RequestHandler = async (req, res, next): Promise<void> => {
+        try {
+            const { messageId } = req.params;
+            const message = await MessageService.getInstance().updateMessage(messageId, req.body);
+            res.json(message);
+        } catch (error) {
+            next(error);
+        }
+    }
 }

@@ -19,16 +19,9 @@ export const checkJwt = auth({
 // Debug middleware to log token information
 export const debugAuth = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
-  console.log('\n=== Auth Debug ===');
-  console.log('Auth Header:', authHeader);
   if (authHeader) {
     const token = authHeader.split(' ')[1];
-    console.log('Token:', token);
-    console.log('Token length:', token?.length);
   }
-  console.log('Auth0 Audience:', process.env.AUTH0_AUDIENCE);
-  console.log('Auth0 Domain:', process.env.AUTH0_DOMAIN);
-  console.log('=================\n');
   next();
 };
 
