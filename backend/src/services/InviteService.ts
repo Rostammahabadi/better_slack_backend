@@ -1,7 +1,13 @@
 // src/services/ChannelService.ts
-import Invite from '../models/Invite';
+import fetch from 'node-fetch';
+global.fetch = fetch as any;
+
+import Invite, { IInviteDocument } from '../models/Invite';
 import sgMail from '@sendgrid/mail';
 import UserService from './UserService';
+import { ManagementClient } from 'auth0';
+import * as crypto from 'crypto';
+
 export interface IInvite {
   workspaceId: string;
   channelId: string;
@@ -10,6 +16,16 @@ export interface IInvite {
 }
 
 class InviteService {
+  private management: ManagementClient;
+
+  constructor() {
+    this.management = new ManagementClient({
+      domain: process.env.AUTH0_DOMAIN || '',
+      clientId: process.env.AUTH0_CLIENT_ID || '',
+      clientSecret: process.env.AUTH0_CLIENT_SECRET || ''
+    });
+  }
+
   async createInvite(inviteData: typeof Invite): Promise<any> {
     sgMail.setApiKey(process.env.SENDGRID_KEY || '');
     const invite = new Invite(inviteData);
@@ -28,13 +44,54 @@ class InviteService {
         unsubscribe_preferences: '#',
       }
     };
-    await sgMail.send(msg).then(() => {
+    try {
+      await sgMail.send(msg).then(() => {
         console.log('Email sent');
-        return invite;
-    }).catch((error) => {
+        this.createUserAndInvite(invite);
+      });
+      return invite;
+    } catch (error) {
       console.error('Error sending email', error);
-    });
-  } 
+      throw error;
+    }
+  }
+
+  async createUserAndInvite(invite: IInviteDocument): Promise<string> {
+    try {
+      const user = await UserService.createUser({
+        email: invite.invitedEmail,
+        auth0Id: "0",
+        isVerified: false,
+        displayName: invite.invitedEmail.split('@')[0],
+        avatarUrl: '',
+        status: 'inactive'
+      });
+      const invitationurl = await this.management.users.create({
+        email: invite.invitedEmail,
+        connection: 'Username-Password-Authentication',
+        email_verified: false,
+        password: crypto.randomBytes(32).toString('hex'),
+        user_metadata: {
+          workspaceId: invite.workspaceId,
+          inviteId: invite._id
+        }
+      });
+      console.log(invitationurl);
+      const ticket = await this.management.tickets.changePassword({
+        user_id: user.user.id,
+        result_url: process.env.AUTH0_CALLBACK_URL,
+        connection_id: 'Username-Password-Authentication',
+        email: invite.invitedEmail,
+        organization_id: invite.workspaceId.toString(),
+        mark_email_as_verified: true
+      });
+      
+      return ticket.data.ticket;
+    } catch (error) {
+      console.error('Error creating invitation:', error);
+      throw error;
+    }
+  }
 
   async getInvite(inviteId: string): Promise<any> {
     return await Invite.findById(inviteId);

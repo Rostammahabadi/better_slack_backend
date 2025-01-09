@@ -9,6 +9,8 @@ interface CreateUserDto {
   email: string;
   displayName?: string;
   avatarUrl?: string;
+  isVerified: boolean;
+  status: 'active' | 'inactive';
 }
 
 interface UserWithWorkspace {

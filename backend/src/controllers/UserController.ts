@@ -20,7 +20,9 @@ export class UserController {
         auth0Id,
         email,
         displayName,
-        avatarUrl
+        avatarUrl,
+        isVerified: true,
+        status: 'active'
       });
 
       res.status(201).json(user);

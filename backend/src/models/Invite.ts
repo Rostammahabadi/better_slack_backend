@@ -11,6 +11,19 @@ export interface Invite extends Document {
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  invitationUrl: string;
+}
+
+export interface IInviteDocument extends Document {
+  invitedEmail: string;
+  workspaceId: Types.ObjectId;
+  invitedBy: Types.ObjectId;
+  status: 'pending' | 'accepted' | 'declined';
+  token: string;
+  expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  invitationUrl: string;
 }
 
 const InviteSchema = new Schema({
@@ -44,6 +57,10 @@ const InviteSchema = new Schema({
     type: Date, 
     required: true,
     default: () => new Date(+new Date() + 7*24*60*60*1000) // 7 days from creation
+  },
+  invitationUrl: {
+    type: String,
+    required: true
   }
 }, {
   timestamps: true

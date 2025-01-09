@@ -42,7 +42,7 @@ class APIServer {
     this.app.use('/api/channels', authenticate, channelRoutes, rateLimiter);
     this.app.use('/api/workspaces', authenticate, workspaceRoutes, rateLimiter);
     this.app.use('/api', authenticate, reactionRoutes);
-    this.app.use('/api/invites', authenticate, inviteRoutes);
+    this.app.use('/api/invites', inviteRoutes, rateLimiter);
     
     this.app.get('/health', (req, res) => {
       res.status(200).json({ status: 'healthy' });
