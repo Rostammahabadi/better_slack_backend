@@ -1,7 +1,25 @@
-# docker-compose.yml
 version: '3.8'
 
 services:
+  mongodb:
+    build:
+      context: ./mongodb
+      dockerfile: Dockerfile
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=your_secure_password
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   backend:
     build:
       context: ./backend
@@ -10,10 +28,13 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - MONGODB_URI=your_mongodb_uri
+      - MONGODB_URI=mongodb://root:your_secure_password@mongodb:27017/
       - PORT=3000
     networks:
       - app-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
@@ -29,10 +50,12 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3001
+      - MONGODB_URI=mongodb://root:your_secure_password@mongodb:27017/
     networks:
       - app-network
     depends_on:
       - backend
+      - mongodb
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
       interval: 30s
@@ -42,3 +65,7 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  mongodb-data:
+    driver: local

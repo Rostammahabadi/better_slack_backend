@@ -33,6 +33,7 @@ export class MessageController {
     static updateMessage: RequestHandler = async (req, res, next): Promise<void> => {
         try {
             const { messageId } = req.params;
+            console.log(req.body);
             const message = await MessageService.updateMessage(messageId, req.body);
             res.json(message);
         } catch (error) {

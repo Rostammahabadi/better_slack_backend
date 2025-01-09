@@ -28,8 +28,7 @@ export const debugAuth = (req: Request, res: Response, next: NextFunction) => {
 // You can keep the authenticate middleware for additional custom auth logic
 export const authenticate = (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Add any additional authentication logic here
-    next();
+    checkJwt(req, res, next);
   } catch (error) {
     console.error('Authentication error:', error);
     res.status(401).json({ error: 'Authentication failed' });

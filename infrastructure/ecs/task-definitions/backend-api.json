@@ -1,0 +1,33 @@
+{
+    "family": "backend-api",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "1024",
+    "memory": "2048",
+    "containerDefinitions": [
+      {
+        "name": "backend-api",
+        "image": "474668398195.dkr.ecr.us-east-2.amazonaws.com/backend-api:latest",
+        "portMappings": [
+          {
+            "containerPort": 3000,
+            "protocol": "tcp"
+          }
+        ],
+        "environment": [
+          {
+            "name": "MONGODB_URI",
+            "value": "mongodb+srv://your-mongodb-connection-string"
+          }
+        ],
+        "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+            "awslogs-group": "/ecs/backend-api",
+            "awslogs-region": "us-east-2",
+            "awslogs-stream-prefix": "ecs"
+          }
+        }
+      }
+    ]
+  }

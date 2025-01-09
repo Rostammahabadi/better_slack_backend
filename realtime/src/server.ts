@@ -9,14 +9,16 @@ dotenv.config();
 
 class RealtimeServer {
   private httpServer;
-  private io: SocketServer;
-  private redis: Redis;
+  private io!: SocketServer;
+  private redis!: Redis;
   private channels: Map<string, Map<string, any>>;
+  private workspaces: Map<string, Map<string, any>>;
   private userSessions: Map<string, Set<string>>;
 
   constructor() {
     this.httpServer = createServer();
     this.channels = new Map();
+    this.workspaces = new Map();
     this.userSessions = new Map();
   }
 
@@ -53,6 +55,31 @@ class RealtimeServer {
       console.log(`Client connected: ${socket.id}`);
 
       this.authenticateConnection(socket);
+
+      socket.on('workspace:join', (workspaceId: string, userId: string) => {
+        console.log('workspace:join', {
+          workspaceId,
+          userId
+        });
+        // Join the workspace room for receiving updates
+        const roomName = `workspace:${workspaceId}`;
+        socket.join(roomName);
+
+        // Initialize workspace users map if it doesn't exist
+        if (!this.workspaces.has(workspaceId)) {
+          this.workspaces.set(workspaceId, new Map());
+        }
+
+        // Add user to workspace users map with their socket id and status
+        this.workspaces.get(workspaceId)?.set(socket.id, {
+          userId,
+          status: 'online'
+        });
+
+        // Notify all workspace users about the new user
+        const workspaceUsers = Array.from(this.workspaces.get(workspaceId)?.values() || []);
+        this.io.to(roomName).emit('workspace:users', workspaceUsers);
+      });
 
       socket.on('channel:join', (channelId: string, userId: string) => {
         const roomName = `channel:${channelId}`;
@@ -93,6 +120,39 @@ class RealtimeServer {
         }
       });
 
+      socket.on('channel:create', (channel) => {
+        try {
+          this.io.to(`workspace:${channel.workspaceId}`).emit('channel:create', {
+            channel
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to create channel',
+            error: error.message
+          });
+        }
+      });
+
+      socket.on('channel:edit_message', ({ channelId, messageId, message }) => {
+        try {
+          console.log('channel:edit_message', {
+            messageId,
+            message,
+            channelId
+          });
+          this.io.to(`channel:${channelId}`).emit('channel:edit_message', {
+            messageId,
+            message,
+            channelId
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to edit message',
+            error: error.message
+          });
+        }
+      });
+
       socket.on('channel:typing', ({ channelId, isTyping }) => {
         const channel = this.channels.get(channelId);
         if (channel && channel.has(socket.id)) {
@@ -101,6 +161,41 @@ class RealtimeServer {
             userId: socket.id,
             username: user?.username,
             isTyping
+          });
+        }
+      });
+
+      socket.on('channel:reaction', ({ channelId, messageId, reaction }) => {
+        try {
+          this.io.to(`channel:${channelId}`).emit('channel:reaction', {
+            messageId,
+            reaction,
+            channelId
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to save reaction',
+            error: error.message
+          });
+        }
+      });
+
+      socket.on('channel:reaction_removed', ({ channelId, messageId, reaction }) => {
+        try {
+          console.log('channel:reaction_removed', {
+            messageId,
+            reaction,
+            channelId
+          });
+          this.io.to(`channel:${channelId}`).emit('channel:reaction_removed', {
+            messageId,
+            reaction,
+            channelId
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to remove reaction',
+            error: error.message
           });
         }
       });

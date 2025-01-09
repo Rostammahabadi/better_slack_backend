@@ -3,6 +3,7 @@ import { Request, RequestHandler, Response } from 'express';
 import User from '../models/User';
 import UserService from '../services/UserService';
 import WorkspaceService from '../services/WorkspaceService';
+import InviteService from '../services/InviteService';
 
 export class UserController {
   static createUser: RequestHandler = async (req: Request, res: Response) => {
@@ -45,10 +46,11 @@ export class UserController {
 
       // Get associated workspace
       const workspace = await WorkspaceService.getWorkspacesByUserId(user._id.toString());
-
+      const invites = await InviteService.getInvitesForUser(user._id.toString());
       res.json({
         user,
-        workspace
+        workspace,
+        invites
       });
       return;
     } catch (error) {

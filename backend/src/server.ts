@@ -11,6 +11,7 @@ import messageRoutes from './routes/messageRoutes';
 import channelRoutes from './routes/channelRoutes';
 import reactionRoutes from './routes/reactionRoutes';
 import workspaceRoutes from './routes/workspaceRoutes';
+import inviteRoutes from './routes/inviteRoutes';
 
 import dotenv from 'dotenv';
 
@@ -36,10 +37,12 @@ class APIServer {
 
   private configureRoutes(): void {
     this.app.use('/api/users', authenticate, userRoutes, rateLimiter);
+    this.app.use('/register', userRoutes);
     this.app.use('/api/messages', authenticate, messageRoutes, messageRateLimiter);
     this.app.use('/api/channels', authenticate, channelRoutes, rateLimiter);
     this.app.use('/api/workspaces', authenticate, workspaceRoutes, rateLimiter);
     this.app.use('/api', authenticate, reactionRoutes);
+    this.app.use('/api/invites', authenticate, inviteRoutes);
     
     this.app.get('/health', (req, res) => {
       res.status(200).json({ status: 'healthy' });

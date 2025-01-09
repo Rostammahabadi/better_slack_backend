@@ -78,25 +78,6 @@ class WorkspaceService {
   getWorkspaceChannels(workspaceId: string): Promise<IChannel[]> {
     return Channel.find({ workspaceId: new Types.ObjectId(workspaceId) });
   }
-
-  async inviteUsersToWorkspace(workspaceId: string, userId: string, emails: string[]): Promise<Array<{ _id: string, invitedEmail: string }>> {
-    const invites = await Promise.all(emails.map(async (email) => {
-      const invite = await Invite.create({
-        workspaceId: new Types.ObjectId(workspaceId),
-        invitedBy: new Types.ObjectId(userId),
-        invitedEmail: email,
-        status: 'pending',
-        token: crypto.randomBytes(16).toString('hex')
-      });
-      
-      return {
-        _id: invite._id.toString(),
-        invitedEmail: invite.invitedEmail
-      };
-    }));
-    
-    return invites;
-  }
 }
 
 export default new WorkspaceService();

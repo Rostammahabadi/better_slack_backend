@@ -1,0 +1,27 @@
+{
+    "family": "realtime-server",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "1024",
+    "memory": "2048",
+    "containerDefinitions": [
+      {
+        "name": "realtime-server",
+        "image": "474668398195.dkr.ecr.us-east-2.amazonaws.com/realtime-server:latest",
+        "portMappings": [
+          {
+            "containerPort": 3001,
+            "protocol": "tcp"
+          }
+        ],
+        "logConfiguration": {
+          "logDriver": "awslogs",
+          "options": {
+            "awslogs-group": "/ecs/realtime-server",
+            "awslogs-region": "us-east-2",
+            "awslogs-stream-prefix": "ecs"
+          }
+        }
+      }
+    ]
+  }
