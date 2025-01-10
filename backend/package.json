@@ -5,7 +5,7 @@
     "scripts": {
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "build": "npm install --production=false && tsc",
+    "build": "npm install --production=true && tsc",
     "test": "jest"
     },
     "dependencies": {

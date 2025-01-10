@@ -29,7 +29,10 @@ class APIServer {
   }
 
   private configureMiddleware(): void {
-    this.app.use(cors());
+    this.app.use(cors({
+      origin: process.env.FRONTEND_URL,
+      credentials: true
+    }));
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
     this.app.use(errorHandler);
