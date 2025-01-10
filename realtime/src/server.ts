@@ -1,7 +1,7 @@
 // realtime/src/server.ts
 import { Server as SocketServer } from 'socket.io';
 import { createServer } from 'http';
-import { Redis } from 'ioredis';
+import Redis  from 'ioredis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import dotenv from 'dotenv';
 
@@ -23,10 +23,22 @@ class RealtimeServer {
   }
 
   private async initializeServices(): Promise<void> {
-    this.redis = new Redis({
-      host: process.env.REDIS_HOST,
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD
+    const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+    this.redis = new Redis(REDIS_URL, {
+      retryStrategy: (times: number) => {
+        // Maximum retry delay is 3000ms
+        const delay = Math.min(times * 50, 3000);
+        return delay;
+      },
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      reconnectOnError: (err) => {
+        const targetError = 'READONLY';
+        if (err.message.includes(targetError)) {
+          return true;
+        }
+        return false;
+      }
     });
   }
 
@@ -37,6 +49,7 @@ class RealtimeServer {
         methods: ['GET', 'POST', 'PUT', 'DELETE'],
         credentials: true
       },
+      transports: ['websocket', 'polling'],
       pingTimeout: 60000,
       pingInterval: 25000
     });
@@ -247,7 +260,7 @@ class RealtimeServer {
   public async start(): Promise<void> {
     await this.initializeServices();
     await this.configureSocketIO();
-    const port = process.env.REALTIME_PORT || 3001;
+    const port = process.env.PORT || 3001;
     this.httpServer.listen(port, () => {
       console.log(`Realtime Server running on port ${port}`);
     });
