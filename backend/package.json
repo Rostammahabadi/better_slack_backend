@@ -5,7 +5,7 @@
     "scripts": {
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "build": "npm install --production=true && tsc",
+    "build": "npm install --production=true && tsc"
     },
     "dependencies": {
         "@sendgrid/mail": "^8.1.4",
