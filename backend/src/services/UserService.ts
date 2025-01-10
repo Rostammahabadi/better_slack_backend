@@ -21,52 +21,56 @@ interface UserWithWorkspace {
 class UserService {
   async createUser(userData: CreateUserDto): Promise<UserWithWorkspace> {
     try {
-      // Check for existing user
+      // Check for existing user with more detailed error handling
       const existingUser = await User.findOne({
         $or: [{ auth0Id: userData.auth0Id }, { email: userData.email }]
       });
 
       if (existingUser) {
-        throw new Error('User already exists');
+        // Fix: Get the first workspace or create one if none exists
+        const workspaces = await WorkspaceService.getWorkspacesByUserId(existingUser._id.toString());
+        const workspace = workspaces[0]; // Get first workspace
+        if (!workspace) {
+          // Create a workspace if user doesn't have one
+          const workspaceName = `${existingUser.displayName || existingUser.username}'s Workspace`;
+          const newWorkspace = await WorkspaceService.createWorkspace({
+            name: workspaceName,
+            ownerId: existingUser._id
+          });
+          return { user: existingUser, workspace: newWorkspace };
+        }
+        return { user: existingUser, workspace };
       }
 
-      // Generate base username from email
-      let baseUsername = userData.email
-        .split('@')[0]
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '');
-
-      // Handle username uniqueness
-      let username = baseUsername;
-      let counter = 1;
-      while (await User.findOne({ username })) {
-        username = `${baseUsername}${counter}`;
-        counter++;
-      }
-
-      // Create new user
+      // Create new user with proper error handling
       const user = new User({
         auth0Id: userData.auth0Id,
-        email: userData.email,
-        username,
-        displayName: userData.displayName || username,
-        avatarUrl: userData.avatarUrl
+        email: userData.email.toLowerCase(), // Ensure email is lowercase
+        displayName: userData.displayName,
+        avatarUrl: userData.avatarUrl,
+        status: 'active',
+        isVerified: true,
+        username: userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '')
       });
 
       await user.save();
 
-      // Create default workspace
-      const workspaceName = `${userData.displayName || user.username}'s Workspace`;
-      const workspace = await WorkspaceService.createWorkspace({
-        name: workspaceName,
-        ownerId: user._id as Types.ObjectId
-      });
+      // Create default workspace with error handling
+      try {
+        const workspaceName = `${userData.displayName || user.username}'s Workspace`;
+        const workspace = await WorkspaceService.createWorkspace({
+          name: workspaceName,
+          ownerId: user._id
+        });
 
-      return { user, workspace };
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 11000) {
-        throw new Error('User already exists');
+        return { user, workspace };
+      } catch (workspaceError) {
+        // If workspace creation fails, delete the user and throw
+        await User.findByIdAndDelete(user._id);
+        throw workspaceError;
       }
+    } catch (error) {
+      console.error('Error in createUser:', error);
       throw error;
     }
   }
