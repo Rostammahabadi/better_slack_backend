@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: better-slack-backend
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: PORT
+        value: 3000
+    autoDeploy: true 
