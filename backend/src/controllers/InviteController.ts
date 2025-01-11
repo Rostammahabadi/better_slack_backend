@@ -4,7 +4,8 @@ import UserService from "../services/UserService";
 export class InviteController {
     static createInvites: RequestHandler = async (req, res, next): Promise<void> => {
         try {
-            const invites = req.body.emails;
+            console.log(req.body);
+            const invites = req.body;
             const createdInvites = [];
 
             for (const inviteData of invites) {

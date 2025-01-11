@@ -2,13 +2,15 @@
 import Workspace, { IWorkspace } from '../models/Workspace';
 import { Types } from 'mongoose';
 import Channel, { IChannel } from '../models/Channel';
-import Invite from '../models/Invite';
-import crypto from 'crypto';
 
 
 interface CreateWorkspaceDto {
   name: string;
   ownerId: Types.ObjectId;
+  members: Array<{
+    userId: Types.ObjectId;
+    role: 'admin' | 'member';
+  }>;
 }
 
 class WorkspaceService {

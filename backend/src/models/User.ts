@@ -31,6 +31,7 @@ export interface IUser extends Document, IUserMethods {
   status: 'active' | 'inactive' | 'suspended';
   isOnline: boolean;
   lastSeen: Date;
+  workspaces: Types.ObjectId[];
   theme: 'dark' | 'light';
   notificationPreferences: NotificationPreferences;
   createdAt: Date;
@@ -40,7 +41,7 @@ export interface IUser extends Document, IUserMethods {
 const UserSchema = new Schema({
   auth0Id: { 
     type: String, 
-    required: true, 
+    required: false, 
     unique: true
   },
   email: {
@@ -136,7 +137,11 @@ const UserSchema = new Schema({
       push: { type: Boolean, default: true }
     },
     default: { email: true, push: true }
-  }
+  },
+  workspaces: [{
+    type: Schema.Types.ObjectId,
+    ref: 'Workspace'
+  }]
 }, { 
   timestamps: true,
   toJSON: { 

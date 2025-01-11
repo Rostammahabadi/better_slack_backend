@@ -13,13 +13,9 @@ interface CreateUserDto {
   status: 'active' | 'inactive';
 }
 
-interface UserWithWorkspace {
-  user: IUser;
-  workspace: IWorkspace;
-}
 
 class UserService {
-  async createUser(userData: CreateUserDto): Promise<UserWithWorkspace> {
+  async createUser(userData: CreateUserDto): Promise<IUser> {
     try {
       // Check for existing user with more detailed error handling
       const existingUser = await User.findOne({
@@ -27,22 +23,34 @@ class UserService {
       });
 
       if (existingUser) {
-        // Fix: Get the first workspace or create one if none exists
+        // Get the first workspace or create one if none exists
         const workspaces = await WorkspaceService.getWorkspacesByUserId(existingUser._id.toString());
         const workspace = workspaces[0]; // Get first workspace
+        
         if (!workspace) {
           // Create a workspace if user doesn't have one
           const workspaceName = `${existingUser.displayName || existingUser.username}'s Workspace`;
           const newWorkspace = await WorkspaceService.createWorkspace({
             name: workspaceName,
-            ownerId: existingUser._id
+            ownerId: existingUser._id,
+            members: [{ userId: existingUser._id, role: 'admin' }]
           });
-          return { user: existingUser, workspace: newWorkspace };
+          
+          // Only push if workspace ID isn't already in the array
+          if (!existingUser.workspaces.includes(newWorkspace._id)) {
+            existingUser.workspaces.push(newWorkspace._id);
+            await existingUser.save();
+          }
+        } else if (!existingUser.workspaces.includes(workspace._id)) {
+          // Only push if workspace ID isn't already in the array
+          existingUser.workspaces.push(workspace._id);
+          await existingUser.save();
         }
-        return { user: existingUser, workspace };
+        
+        return existingUser;
       }
 
-      // Create new user with proper error handling
+      // Create new user
       const user = new User({
         auth0Id: userData.auth0Id,
         email: userData.email.toLowerCase(), // Ensure email is lowercase
@@ -50,20 +58,26 @@ class UserService {
         avatarUrl: userData.avatarUrl,
         status: 'active',
         isVerified: true,
-        username: userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '')
+        username: userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, ''),
+        workspaces: [] // Initialize empty workspaces array
       });
 
       await user.save();
 
-      // Create default workspace with error handling
+      // Create default workspace
       try {
         const workspaceName = `${userData.displayName || user.username}'s Workspace`;
         const workspace = await WorkspaceService.createWorkspace({
           name: workspaceName,
-          ownerId: user._id
+          ownerId: user._id,
+          members: [{ userId: user._id, role: 'admin' }]
         });
 
-        return { user, workspace };
+        // Add workspace to user's workspaces array
+        user.workspaces.push(workspace._id);
+        await user.save();
+        
+        return user;
       } catch (workspaceError) {
         // If workspace creation fails, delete the user and throw
         await User.findByIdAndDelete(user._id);
@@ -73,6 +87,10 @@ class UserService {
       console.error('Error in createUser:', error);
       throw error;
     }
+  }
+
+  async getUserByEmail(email: string): Promise<IUser | null> {
+    return User.findOne({ email });
   }
 
   async getUserByAuth0Id(auth0Id: string): Promise<IUser | null> {

@@ -16,6 +16,19 @@ export const checkJwt = auth({
   authRequired: true,
 });
 
+// Optional: Add user info validation
+export const validateUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const auth0Id = req.auth?.payload.sub;
+    if (!auth0Id) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Authentication failed' });
+  }
+};
+
 // Debug middleware to log token information
 export const debugAuth = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;

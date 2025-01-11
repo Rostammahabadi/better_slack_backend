@@ -22,7 +22,7 @@ export class WorkspaceController {
             return;
         }
         const { name } = req.body;
-        const workspace = await WorkspaceService.createWorkspace({ name, ownerId: user._id });
+        const workspace = await WorkspaceService.createWorkspace({ name, ownerId: user._id, members: [{ userId: user._id, role: 'admin' }] });
         res.json(workspace);
     }
 
