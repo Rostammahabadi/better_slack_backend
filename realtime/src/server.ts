@@ -69,6 +69,15 @@ class RealtimeServer {
 
       this.authenticateConnection(socket);
 
+      socket.on('workspace:leave', (workspaceId: string) => {
+        console.log('workspace:leave', {
+          workspaceId
+        });
+        socket.leave(`workspace:${workspaceId}`);
+        this.workspaces.get(workspaceId)?.delete(socket.id);
+        
+      });
+
       socket.on('workspace:join', (workspaceId: string, userId: string) => {
         console.log('workspace:join', {
           workspaceId,
