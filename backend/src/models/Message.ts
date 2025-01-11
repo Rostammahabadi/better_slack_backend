@@ -80,8 +80,16 @@ MessageSchema.virtual('reactions', {
   options: { sort: { createdAt: 1 } }
 });
 
+MessageSchema.pre('find', function() {
+  this.sort({ createdAt: 1 });
+});
+
+MessageSchema.pre('findOne', function() {
+  this.sort({ createdAt: 1 });
+});
+
 // Indexes for query optimization
-MessageSchema.index({ channelId: 1, createdAt: -1 });
+MessageSchema.index({ channelId: 1, createdAt: 1 });
 MessageSchema.index({ threadId: 1, createdAt: 1 });
 MessageSchema.index({ user: 1 }); // Changed from senderId to user to match schema
 

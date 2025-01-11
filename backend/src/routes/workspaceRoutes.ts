@@ -11,4 +11,5 @@ router.use(checkJwt);  // Auth0 JWT verification
 router.get('/:workspaceId', WorkspaceController.getWorkspace);
 router.get('/:workspaceId/channels', WorkspaceController.getWorkspaceChannels);
 router.post('/:workspaceId/channels', ChannelController.createChannel);
+router.post('/', WorkspaceController.createWorkspace);
 export default router;

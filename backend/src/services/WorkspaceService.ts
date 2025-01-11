@@ -17,7 +17,7 @@ class WorkspaceService {
       const workspace = new Workspace({
         name: workspaceData.name,
         ownerId: workspaceData.ownerId,
-        members: [{ userId: workspaceData.ownerId, role: 'admin' }]
+        members: [{ userId: workspaceData.ownerId, role: 'admin' }],
       });
 
       await workspace.save();
