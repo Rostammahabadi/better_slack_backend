@@ -78,6 +78,12 @@ class WorkspaceService {
   getWorkspaceChannels(workspaceId: string): Promise<IChannel[]> {
     return Channel.find({ workspaceId: new Types.ObjectId(workspaceId) });
   }
+
+  getWorkspacesForUser(userId: string): Promise<IWorkspace[]> {
+    return Workspace.find({
+      'members.userId': new Types.ObjectId(userId)
+    });
+  }
 }
 
 export default new WorkspaceService();

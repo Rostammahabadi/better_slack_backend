@@ -25,4 +25,14 @@ export class WorkspaceController {
         const workspace = await WorkspaceService.createWorkspace({ name, ownerId: user._id });
         res.json(workspace);
     }
+
+    static getWorkspacesForUser: RequestHandler = async (req, res, next): Promise<void> => {
+        const user = await UserService.getUserByAuth0Id(req.auth?.payload.sub as string);
+        if (!user) {
+            res.status(404).json({ message: 'User not found' });
+            return;
+        }
+        const workspaces = await WorkspaceService.getWorkspacesForUser(user._id.toString());
+        res.json(workspaces);
+    }
 }

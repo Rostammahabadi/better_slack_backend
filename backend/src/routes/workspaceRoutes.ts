@@ -12,4 +12,5 @@ router.get('/:workspaceId', WorkspaceController.getWorkspace);
 router.get('/:workspaceId/channels', WorkspaceController.getWorkspaceChannels);
 router.post('/:workspaceId/channels', ChannelController.createChannel);
 router.post('/', WorkspaceController.createWorkspace);
+router.get('/', WorkspaceController.getWorkspacesForUser);
 export default router;
