@@ -42,7 +42,7 @@ class APIServer {
     this.app.use('/api/users',rateLimiter, authenticate, userRoutes);
     this.app.use('/register', userRoutes);
     this.app.use('/api/messages',messageRateLimiter, authenticate, messageRoutes);
-    this.app.use('/api/channels', rateLimiter, authenticate, channelRoutes);
+    this.app.use('/api/channels', authenticate, channelRoutes);
     this.app.use('/api/workspaces', rateLimiter, authenticate, workspaceRoutes);
     this.app.use('/api', rateLimiter, authenticate, reactionRoutes);
     this.app.use('/api/invites', rateLimiter, inviteRoutes);
