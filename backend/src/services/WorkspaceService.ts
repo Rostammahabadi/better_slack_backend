@@ -33,21 +33,21 @@ class WorkspaceService {
     return Workspace.find({
       'members.userId': new Types.ObjectId(userId)
     })
-    .populate('ownerId', 'displayName email username avatarUrl')
-    .populate('members.userId', 'displayName email username avatarUrl')
+    .populate('ownerId', '_id displayName username avatarUrl')
+    .populate('members.userId', '_id displayName username avatarUrl')
     .populate({
       path: 'channels',
       populate: [
         {
           path: 'members.userId',
-          select: 'displayName username avatarUrl'
+          select: '_id displayName username avatarUrl'
         },
         {
           path: 'messages',
           options: { limit: 15, sort: { createdAt: -1 } },
           populate: {
             path: 'user',
-            select: 'displayName username avatarUrl'
+            select: '_id displayName username avatarUrl'
           }
         }
       ]
@@ -84,6 +84,15 @@ class WorkspaceService {
   getWorkspacesForUser(userId: string): Promise<IWorkspace[]> {
     return Workspace.find({
       'members.userId': new Types.ObjectId(userId)
+    })
+    .populate('ownerId', '_id displayName username avatarUrl')
+    .populate('members.userId', 'displayName username avatarUrl')
+    .populate({
+      path: 'channels',
+      populate: {
+        path: 'members.userId',
+        select: '_id displayName username avatarUrl'
+      }
     });
   }
 
