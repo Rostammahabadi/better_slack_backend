@@ -58,7 +58,8 @@ export class UserController {
       let workspace;
       
       if (!user) {
-        user = await UserService.createUser({
+        console.log("creatingUser");
+        const newUser = await UserService.createUser({
           auth0Id,
           email: auth0User.data.email || '',
           displayName: auth0User.data.name || auth0User.data.nickname || '',
@@ -66,11 +67,14 @@ export class UserController {
           isVerified: auth0User.data.email_verified || false,
           status: 'active'
         });
+
+        // Use the returned user document which has _id
         workspace = await WorkspaceService.createWorkspace({
-          name: `${user.displayName}'s Workspace`,
-          ownerId: user._id,
-          members: [{ userId: user._id, role: 'admin' }]
+          name: `${newUser.displayName}'s Workspace`,
+          ownerId: newUser._id,
+          members: [{ userId: newUser._id, role: 'admin' }]
         });
+        user = newUser; // Assign newUser to user for the response
       } else {
         workspace = await WorkspaceService.getWorkspacesByUserId(user._id.toString());
       }

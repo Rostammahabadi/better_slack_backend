@@ -7,80 +7,123 @@ global.fetch = fetch as any;
 global.FormData = FormData as any;
 global.Blob = Blob as any;
 
-import Invite from '../models/Invite';
-import sgMail from '@sendgrid/mail';
+import { Types } from 'mongoose';
+import Invite, { IInvite } from '../models/Invite';
+import { InviteError } from '../errors/InviteError';
+import EmailService from './EmailService';
 import UserService from './UserService';
-
-export interface IInvite {
-  workspaceId: string;
-  channelId: string;
-  createdBy: string;
-  expiresAt: Date;
-}
+import WorkspaceService from './WorkspaceService';
 
 class InviteService {
-
-  async createInvite(inviteData: typeof Invite): Promise<any> {
+  async createInvite(workspaceId: string, invitedBy: string, invitedEmail: string): Promise<IInvite> {
     try {
-      // 1. Create the invite record first
-      const invite = new Invite(inviteData);
-      await invite.save();
-
-      const foundUser = await UserService.getUserByEmail(invite.invitedEmail);
-      let user;
-      if (!foundUser) {
-        // 3. Create local user linked to Auth0
-        user = await UserService.createUser({
-          email: invite.invitedEmail,
-          isVerified: false,
-          displayName: invite.invitedEmail.split('@')[0],
-          avatarUrl: '',
-          status: 'inactive',
-          auth0Id: ''
-        });
-      } else {
-        foundUser.workspaces.push(invite.workspaceId);
-        await foundUser.save();
+      // Check if user has access to workspace
+      const workspace = await WorkspaceService.getWorkspaceById(workspaceId);
+      if (!workspace) {
+        throw InviteError.noWorkspaceAccess();
       }
 
-      sgMail.setApiKey(process.env.SENDGRID_KEY || '');
-      const msg = {
-        to: invite.invitedEmail,
-        from: 'RostamMahabadi@gmail.com',
-        subject: foundUser ? 'You have been invited to join a workspace on ChatGenius' : 'You have been invited to join a workspace on ChatGenius',
-        templateId: 'd-c4a4e072297241008159d89c320f7e49',
-        dynamicTemplateData: {
-          buttonUrl: `${process.env.FRONTEND_URL}/invites/${invite.token}`,
-          inviterName: (await UserService.getUserByAuth0Id(invite.invitedBy.toString()))?.displayName,
-          unsubscribe: '#',
-          unsubscribe_preferences: '#',
-        }
-      };
+      // Check if invite already exists
+      const existingInvite = await Invite.findOne({
+        workspaceId,
+        invitedEmail,
+        status: 'pending'
+      });
 
-      const response = await sgMail.send(msg);
-      console.log(response);
+      if (existingInvite) {
+        return existingInvite;
+      }
+
+      const invite = new Invite({
+        workspaceId: new Types.ObjectId(workspaceId),
+        invitedBy: new Types.ObjectId(invitedBy),
+        invitedEmail: invitedEmail.toLowerCase(),
+        status: 'pending',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+      });
+
+      console.log('Creating invite with token:', invite.token);
+      await invite.save();
+      console.log('Saved invite:', invite);
+
+      // Send invite email
+      const inviter = await UserService.getUserById(invitedBy);
+      if (inviter) {
+        await EmailService.sendInviteEmail(invite, inviter.displayName || '');
+      }
+
       return invite;
-      
     } catch (error) {
-      console.error('Error in invite creation process:', error);
+      console.error('Error creating invite:', error);
       throw error;
     }
   }
 
-  async getInvite(inviteId: string): Promise<any> {
-    return await Invite.findById(inviteId);
+  async verifyInviteToken(token: string): Promise<IInvite> {
+    console.log('Verifying token:', token);
+    const invite = await Invite.findOne({ token }).populate('workspaceId');
+    console.log('Found invite:', invite);
+    
+    if (!invite) {
+      throw InviteError.invalidToken();
+    }
+
+    if (invite.status !== 'pending') {
+      throw InviteError.alreadyAccepted();
+    }
+
+    if (invite.expiresAt < new Date()) {
+      invite.status = 'expired';
+      await invite.save();
+      throw InviteError.expired();
+    }
+
+    return invite;
   }
 
-  async deleteInvite(inviteId: string): Promise<void> {
-    await Invite.findByIdAndDelete(inviteId);
+  async acceptInvite(token: string, userId: string): Promise<void> {
+    const invite = await this.verifyInviteToken(token);
+
+    try {
+      // Get the workspaceId string safely
+      const workspaceId = typeof invite.workspaceId === 'string' 
+        ? invite.workspaceId 
+        : invite.workspaceId._id.toString();
+
+      // Add user to workspace
+      await WorkspaceService.addMemberToWorkspace(
+        workspaceId,
+        userId,
+        'member'
+      );
+
+      // Update invite status
+      invite.status = 'accepted';
+      await invite.save();
+    } catch (error) {
+      console.error('Error accepting invite:', error);
+      throw error;
+    }
   }
 
-  async updateInvite(inviteId: string, inviteData: IInvite): Promise<any> {
-    return await Invite.findByIdAndUpdate(inviteId, inviteData, { new: true });
+  async getWorkspaceInvites(workspaceId: string): Promise<IInvite[]> {
+    return Invite.find({
+      workspaceId: new Types.ObjectId(workspaceId),
+      status: 'pending'
+    }).populate('invitedBy', 'displayName email');
   }
 
-  async getInvitesForUser(userId: string): Promise<any> {
-    return await Invite.find({ invitedBy: userId });
+  async getInvite(token: string): Promise<IInvite | null> {
+    return Invite.findOne({ token })
+      .populate('workspaceId')
+      .populate('invitedBy', 'displayName email');
+  }
+
+  async getInvitesForUser(userId: string): Promise<IInvite[]> {
+    return Invite.find({ 
+      invitedBy: new Types.ObjectId(userId),
+      status: 'pending'
+    }).populate('workspaceId');
   }
 }
 

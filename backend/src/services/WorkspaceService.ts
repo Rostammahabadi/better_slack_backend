@@ -86,6 +86,19 @@ class WorkspaceService {
       'members.userId': new Types.ObjectId(userId)
     });
   }
+
+  async addMemberToWorkspace(workspaceId: string, userId: string, role: 'admin' | 'member'): Promise<void> {
+    const wsId = typeof workspaceId === 'object' ? workspaceId : workspaceId;
+    
+    await Workspace.findByIdAndUpdate(wsId, {
+      $addToSet: {
+        members: { 
+          userId: new Types.ObjectId(userId), 
+          role 
+        }
+      }
+    });
+  }
 }
 
 export default new WorkspaceService();

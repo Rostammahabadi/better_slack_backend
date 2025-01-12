@@ -1,74 +1,61 @@
 // src/models/Invite.ts
-import mongoose, { Schema, Document, Types } from 'mongoose';
+import mongoose, { Schema, Document } from 'mongoose';
+import { randomBytes } from 'crypto';
 
-export interface Invite extends Document {
-  _id: Types.ObjectId;
+export interface IInvite extends Document {
+  token: string;
   workspaceId: mongoose.Types.ObjectId;
   invitedBy: mongoose.Types.ObjectId;
   invitedEmail: string;
-  status: 'pending' | 'accepted' | 'declined';
-  token: string;
+  status: 'pending' | 'accepted' | 'expired';
   expiresAt: Date;
   createdAt: Date;
   updatedAt: Date;
-  invitationUrl: string;
-}
-
-export interface IInviteDocument extends Document {
-  invitedEmail: string;
-  workspaceId: Types.ObjectId;
-  invitedBy: Types.ObjectId;
-  status: 'pending' | 'accepted' | 'declined';
-  token: string;
-  expiresAt: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  invitationUrl: string;
 }
 
 const InviteSchema = new Schema({
-  workspaceId: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Workspace', 
-    required: true 
+  token: {
+    type: String,
+    required: true,
+    unique: true,
+    default: () => randomBytes(32).toString('hex')
   },
-  invitedBy: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'User', 
-    required: true 
+  workspaceId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Workspace',
+    required: true
   },
-  invitedEmail: { 
-    type: String, 
+  invitedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  invitedEmail: {
+    type: String,
     required: true,
     lowercase: true,
-    trim: true 
+    trim: true
   },
-  status: { 
-    type: String, 
-    enum: ['pending', 'accepted', 'declined'],
+  status: {
+    type: String,
+    enum: ['pending', 'accepted', 'expired'],
     default: 'pending'
   },
-  token: { 
-    type: String, 
+  expiresAt: {
+    type: Date,
     required: true,
-    unique: true 
-  },
-  expiresAt: { 
-    type: Date, 
-    required: true,
-    default: () => new Date(+new Date() + 7*24*60*60*1000) // 7 days from creation
-  },
-  invitationUrl: {
-    type: String,
-    required: true
+    default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
   }
 }, {
   timestamps: true
 });
 
-// Indexes for query optimization
-InviteSchema.index({ workspaceId: 1, invitedEmail: 1 }, { unique: true });
-InviteSchema.index({ token: 1 });
-InviteSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // TTL index for auto-deletion
+// Indexes
+InviteSchema.index({ token: 1 }, { unique: true });
+InviteSchema.index({ workspaceId: 1 });
+InviteSchema.index({ invitedEmail: 1 });
+InviteSchema.index({ status: 1 });
+InviteSchema.index({ expiresAt: 1 });
+InviteSchema.index({ createdAt: 1 });
 
-export default mongoose.model<Invite>('Invite', InviteSchema);
+export default mongoose.model<IInvite>('Invite', InviteSchema);

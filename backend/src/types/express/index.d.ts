@@ -1,10 +1,20 @@
 // src/types/express/index.d.ts
-declare namespace Express {
+import { IUser } from '../../models/User';
+import { IWorkspace } from '../../models/Workspace';
+
+declare global {
+  namespace Express {
     export interface Request {
-      user: {
-        _id: string;
-        [key: string]: any;
+      user?: IUser;
+      workspace?: IWorkspace;
+      auth?: {
+        payload: {
+          sub: string;
+        };
       };
     }
   }
+}
+
+export {};
   

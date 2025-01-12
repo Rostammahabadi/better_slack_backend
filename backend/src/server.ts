@@ -39,13 +39,14 @@ class APIServer {
   }
 
   private configureRoutes(): void {
+    this.app.use('/api/invites', rateLimiter, inviteRoutes);
     this.app.use('/api/users',rateLimiter, authenticate, userRoutes);
     this.app.use('/register', userRoutes);
     this.app.use('/api/messages',messageRateLimiter, authenticate, messageRoutes);
     this.app.use('/api/channels', authenticate, channelRoutes);
     this.app.use('/api/workspaces', rateLimiter, authenticate, workspaceRoutes);
     this.app.use('/api', rateLimiter, authenticate, reactionRoutes);
-    this.app.use('/api/invites', rateLimiter, inviteRoutes);
+
     
     this.app.get('/health', (req, res) => {
       res.status(200).json({ status: 'healthy' });
