@@ -80,7 +80,7 @@ export class InviteController {
                     displayName: auth0User.data.name || auth0User.data.nickname || '',
                     avatarUrl: auth0User.data.picture || '',
                     isVerified: auth0User.data.email_verified || false,
-                    status: 'active'
+                    accountStatus: 'active'
                 });
             }
 

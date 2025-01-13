@@ -29,7 +29,7 @@ export class UserController {
         displayName,
         avatarUrl,
         isVerified: true,
-        status: 'active'
+        accountStatus: 'active'
       });
 
       res.status(201).json(user);
@@ -65,7 +65,7 @@ export class UserController {
           displayName: auth0User.data.name || auth0User.data.nickname || '',
           avatarUrl: auth0User.data.picture || '',
           isVerified: auth0User.data.email_verified || false,
-          status: 'active'
+          accountStatus: 'active'
         });
 
         // Use the returned user document which has _id
@@ -113,6 +113,56 @@ export class UserController {
       }
       res.json(user);
       return;
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static setStatus: RequestHandler = async (req, res, next) => {
+    try {
+      const auth0Id = req.auth?.payload.sub;
+      const { emoji, text, expiresAt } = req.body;
+
+      if (!auth0Id) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const user = await UserService.getUserByAuth0Id(auth0Id);
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      const updatedUser = await UserService.setStatus(user._id.toString(), {
+        emoji,
+        text,
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined
+      });
+
+      res.json(updatedUser);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static clearStatus: RequestHandler = async (req, res, next) => {
+    try {
+      const auth0Id = req.auth?.payload.sub;
+
+      if (!auth0Id) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      const user = await UserService.getUserByAuth0Id(auth0Id);
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      const updatedUser = await UserService.clearStatus(user._id.toString());
+      res.json(updatedUser);
     } catch (error) {
       next(error);
     }

@@ -28,7 +28,8 @@ export interface IUser extends Document, IUserMethods {
   username: string;
   displayName?: string;
   avatarUrl?: string;
-  status: 'active' | 'inactive' | 'suspended';
+  accountStatus: 'active' | 'inactive' | 'suspended';
+  userStatus?: IUserStatus;
   isOnline: boolean;
   lastSeen: Date;
   workspaces: Types.ObjectId[];
@@ -36,6 +37,13 @@ export interface IUser extends Document, IUserMethods {
   notificationPreferences: NotificationPreferences;
   createdAt: Date;
   updatedAt: Date;
+}
+
+interface IUserStatus {
+  emoji?: string;
+  text: string;
+  expiresAt?: Date;
+  createdAt: Date;
 }
 
 const UserSchema = new Schema({
@@ -107,13 +115,19 @@ const UserSchema = new Schema({
       message: 'Invalid URL format'
     }
   },
-  status: { 
-    type: String, 
+  accountStatus: {
+    type: String,
     default: 'active',
     enum: {
       values: ['active', 'inactive', 'suspended'],
       message: '{VALUE} is not a valid status'
     }
+  },
+  userStatus: {
+    emoji: { type: String },
+    text: { type: String },
+    expiresAt: { type: Date },
+    createdAt: { type: Date, default: Date.now }
   },
   isOnline: { 
     type: Boolean, 

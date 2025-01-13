@@ -10,9 +10,14 @@ interface CreateUserDto {
   displayName?: string;
   avatarUrl?: string;
   isVerified: boolean;
-  status: 'active' | 'inactive';
+  accountStatus: 'active' | 'inactive';
 }
 
+interface SetStatusDto {
+  emoji?: string;
+  text: string;
+  expiresAt?: Date;
+}
 
 class UserService {
   async createUser(userData: CreateUserDto): Promise<IUser> {
@@ -56,7 +61,7 @@ class UserService {
         email: userData.email.toLowerCase(), // Ensure email is lowercase
         displayName: userData.displayName,
         avatarUrl: userData.avatarUrl,
-        status: 'active',
+        accountStatus: 'active',
         isVerified: true,
         username: userData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, ''),
         workspaces: [] // Initialize empty workspaces array
@@ -114,6 +119,39 @@ class UserService {
         { email: { $regex: query, $options: 'i' } }
       ]
     }).limit(10);
+  }
+
+  async setStatus(userId: string, statusData: SetStatusDto): Promise<IUser> {
+    const userStatus = {
+      ...statusData,
+      createdAt: new Date()
+    };
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $set: { userStatus } },
+      { new: true }
+    );
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    return user;
+  }
+
+  async clearStatus(userId: string): Promise<IUser> {
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { $unset: { userStatus: "" } },
+      { new: true }
+    );
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    return user;
   }
 }
 
