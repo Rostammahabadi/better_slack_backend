@@ -7,7 +7,7 @@
         "dev": "nodemon src/server.ts",
         "build": "npm install --production=false && tsc",
         "test": "jest",
-        "seed": "ts-node src/scripts/seedDatabase.ts"
+        "seed": "ts-node src/scripts/seedDatabaseWithoutCreatingUsers.ts"
     },
     "dependencies": {
         "@sendgrid/mail": "^8.1.4",

@@ -1,7 +1,7 @@
 // src/models/Message.ts
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export type MessageType = 'channel' | 'conversation' | 'thread';
+export type MessageType = 'channel' | 'conversation' | 'thread' | 'bot';
 
 export interface IMessage extends Document {
   _id: Types.ObjectId;
@@ -38,7 +38,7 @@ const MessageSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ['channel', 'conversation', 'thread'],
+    enum: ['channel', 'conversation', 'thread', 'bot'],
     required: true
   },
   channelId: { 

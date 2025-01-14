@@ -145,6 +145,18 @@ const UserSchema = new Schema({
       message: '{VALUE} is not a valid theme'
     }
   },
+  profile: {
+    tone: {
+      type: String,
+      default: 'neutral',
+      enum: ['friendly', 'professional', 'casual', 'assertive', 'neutral'],
+    },
+    formality: {
+      type: String,
+      default: 'neutral',
+      enum: ['formal', 'informal', 'neutral'],
+    },
+  },
   notificationPreferences: {
     type: {
       email: { type: Boolean, default: true },
