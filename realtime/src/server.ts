@@ -331,6 +331,54 @@ class RealtimeServer {
         }
       });
 
+      socket.on('channel:thread_reply', ({ channelId, threadId, reply }) => {
+        try {
+          console.log('channel:thread_reply', {
+            channelId,
+            threadId,
+            reply
+          });
+          
+          const roomName = `channel:${channelId}`;
+          this.io.to(roomName).emit('channel:thread_reply', {
+            channelId,
+            threadId,
+            reply,
+            userId: reply.userId,
+            timestamp: new Date().toISOString()
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to send thread reply',
+            error: error.message
+          });
+        }
+      });
+
+      socket.on('conversation:thread_reply', ({ conversationId, threadId, reply }) => {
+        try {
+          console.log('conversation:thread_reply', {
+            conversationId,
+            threadId,
+            reply
+          });
+          
+          const roomName = `conversation:${conversationId}`;
+          this.io.to(roomName).emit('conversation:thread_reply', {
+            conversationId,
+            threadId,
+            reply,
+            userId: reply.userId,
+            timestamp: new Date().toISOString()
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to send thread reply',
+            error: error.message
+          });
+        }
+      });
+
       socket.on('disconnect', () => {
         if (this.userSessions.has(socket.id)) {
           const userChannels = this.userSessions.get(socket.id);
