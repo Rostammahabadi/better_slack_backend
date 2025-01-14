@@ -14,12 +14,14 @@ class RealtimeServer {
   private channels: Map<string, Map<string, any>>;
   private workspaces: Map<string, Map<string, any>>;
   private userSessions: Map<string, Set<string>>;
+  private conversations: Map<string, Map<string, any>>;
 
   constructor() {
     this.httpServer = createServer();
     this.channels = new Map();
     this.workspaces = new Map();
     this.userSessions = new Map();
+    this.conversations = new Map();
   }
 
   private async initializeServices(): Promise<void> {
@@ -155,16 +157,16 @@ class RealtimeServer {
         }
       });
 
-      socket.on('channel:edit_message', ({ channelId, messageId, message }) => {
+      socket.on('channel:edit_message', ({ channelId, messageId, content }) => {
         try {
           console.log('channel:edit_message', {
             messageId,
-            message,
+            content,
             channelId
           });
           this.io.to(`channel:${channelId}`).emit('channel:edit_message', {
             messageId,
-            message,
+            content,
             channelId
           });
         } catch (error: any) {
@@ -226,11 +228,118 @@ class RealtimeServer {
         this.handleChannelLeave(socket, channelId);
       });
 
+      socket.on('conversation:connect', (conversationId: string, userId: string) => {
+        const roomName = `conversation:${conversationId}`;
+        socket.join(roomName);
+        
+        if (!this.conversations.has(conversationId)) {
+          this.conversations.set(conversationId, new Map());
+        }
+        
+        this.conversations.get(conversationId)?.set(socket.id, {
+          userId,
+          status: 'online'
+        });
+        
+        if (!this.userSessions.has(socket.id)) {
+          this.userSessions.set(socket.id, new Set());
+        }
+        this.userSessions.get(socket.id)?.add(conversationId);
+        
+        const conversationMembers = Array.from(this.conversations.get(conversationId)?.values() || []);
+        this.io.to(roomName).emit('conversation:users', conversationMembers);
+        console.log('conversation:connect', {
+          conversationId,
+          userId
+        });
+      });
+
+      socket.on('conversation:leave', ({ conversationId }) => {
+        this.handleConversationLeave(socket, conversationId);
+      });
+
+      socket.on('conversation:message', async (message) => {
+        try {
+          const roomName = `conversation:${message.conversationId}`;
+          this.io.to(roomName).emit('conversation:message', message);
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to send conversation message',
+            error: error.message
+          });
+        }
+      });
+
+      socket.on('conversation:typing', ({ conversationId, isTyping }) => {
+        const conversation = this.conversations.get(conversationId);
+        if (conversation && conversation.has(socket.id)) {
+          const user = conversation.get(socket.id);
+          socket.to(`conversation:${conversationId}`).emit('conversation:typing', {
+            userId: user?.userId,
+            isTyping
+          });
+        }
+      });
+
+      socket.on('conversation:edit_message', ({ conversationId, messageId, content }) => {
+        console.log('conversation:edit_message', {
+          messageId,
+          content,
+          conversationId
+        });
+        try {
+          this.io.to(`conversation:${conversationId}`).emit('conversation:edit_message', {
+            messageId,
+            content,
+            conversationId
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to edit conversation message',
+            error: error.message
+          });
+        }
+      });
+
+      socket.on('conversation:reaction', ({ conversationId, messageId, reaction }) => {
+        try {
+          this.io.to(`conversation:${conversationId}`).emit('conversation:reaction', {
+            messageId,
+            reaction,
+            conversationId
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to add reaction',
+            error: error.message
+          });
+        }
+      });
+
+      socket.on('conversation:reaction_removed', ({ conversationId, messageId, reaction }) => {
+        try {
+          this.io.to(`conversation:${conversationId}`).emit('conversation:reaction_removed', {
+            messageId,
+            reaction,
+            conversationId
+          });
+        } catch (error: any) {
+          socket.emit('error', {
+            message: 'Failed to remove reaction',
+            error: error.message
+          });
+        }
+      });
+
       socket.on('disconnect', () => {
         if (this.userSessions.has(socket.id)) {
           const userChannels = this.userSessions.get(socket.id);
-          userChannels?.forEach(channelId => {
-            this.handleChannelLeave(socket, channelId);
+          userChannels?.forEach(id => {
+            if (id.startsWith('channel:')) {
+              this.handleChannelLeave(socket, id.replace('channel:', ''));
+            } else {
+              this.handleConversationLeave(socket, id.replace('conversation:', ''));
+            }
           });
           this.userSessions.delete(socket.id);
         }
@@ -256,6 +365,27 @@ class RealtimeServer {
       userId: socket.id,
       channelId
     });
+  }
+
+  private handleConversationLeave(socket: any, conversationId: string): void {
+    const roomName = `conversation:${conversationId}`;
+    socket.leave(roomName);
+    
+    const conversation = this.conversations.get(conversationId);
+    if (conversation) {
+      const user = conversation.get(socket.id);
+      conversation.delete(socket.id);
+      if (conversation.size === 0) {
+        this.conversations.delete(conversationId);
+      }
+      
+      this.userSessions.get(socket.id)?.delete(conversationId);
+      
+      this.io.to(roomName).emit('conversation:user_left', {
+        userId: user?.userId,
+        conversationId
+      });
+    }
   }
 
   private authenticateConnection(socket: any): void {
