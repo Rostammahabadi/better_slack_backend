@@ -157,7 +157,8 @@ class UserService {
   async getUsers(
     limit: number = 10,
     lastId?: string,
-    search?: string
+    search?: string,
+    workspaceId?: string
   ): Promise<IUser[]> {
     const query: any = {};
     
@@ -173,6 +174,10 @@ class UserService {
         { displayName: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } }
       ];
+    }
+
+    if (workspaceId) {
+      query.workspaces = { $in: [new Types.ObjectId(workspaceId)] };
     }
 
     return User.find(query)

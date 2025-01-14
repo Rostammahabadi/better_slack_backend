@@ -96,8 +96,9 @@ export class UserController {
       const limit = parseInt(req.query.limit as string) || 10;
       const lastId = req.query.lastId as string;
       const search = req.query.search as string;
+      const workspaceId = req.query.workspaceId as string;
 
-      const users = await UserService.getUsers(limit, lastId, search);
+      const users = await UserService.getUsers(limit, lastId, search, workspaceId);
       
       // Send the last ID for next pagination request
       const lastUser = users[users.length - 1];
