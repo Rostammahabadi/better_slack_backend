@@ -13,5 +13,6 @@ router.get('/:id', ConversationController.getConversationWithMessages);
 router.get('/:conversationId/messages', ConversationController.getMessages);
 router.post('/:conversationId/messages', ConversationController.sendMessage);
 router.post('/:conversationId/messages/:messageId/replies', ConversationController.replyToMessage);
+router.put('/:conversationId/messages/:messageId', ConversationController.updateMessage);
 
 export default router;

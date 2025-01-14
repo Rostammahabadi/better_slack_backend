@@ -225,6 +225,22 @@ class ConversationService {
 
     return populatedMessage;
   }
+
+  static async updateMessage(
+    messageId: string,
+    userId: string,
+    content: string
+  ): Promise<IMessage | null> {
+    const message = await Message.findOneAndUpdate(
+      { _id: new Types.ObjectId(messageId), user: new Types.ObjectId(userId) },
+      { content, updatedAt: new Date() },
+      { new: true }
+    )
+      .populate('user', 'displayName username avatarUrl')
+      .lean();
+
+    return message;
+  }
 }
 
 export default ConversationService; 

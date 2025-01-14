@@ -125,4 +125,35 @@ export class ConversationController {
         }
     };
 
+    static updateMessage: RequestHandler = async (req, res, next) => {
+        try {
+            const { conversationId, messageId } = req.params;
+            const { content } = req.body;
+            const auth0Id = req.auth?.payload.sub;
+
+            if (!auth0Id || !content) {
+                return res.status(400).json({ error: 'Missing required fields' });
+            }
+
+            const user = await UserService.getUserByAuth0Id(auth0Id);
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            const message = await ConversationService.updateMessage(
+                messageId,
+                user._id.toString(),
+                content
+            );
+
+            if (!message) {
+                return res.status(404).json({ error: 'Message not found' });
+            }
+
+            res.json(message);
+        } catch (error) {
+            next(error);
+        }
+    };
+
 }
