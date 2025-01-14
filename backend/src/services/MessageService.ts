@@ -5,11 +5,18 @@ import Redis from 'ioredis';
 import { redisClient } from '../config/redis';
 
 export interface IMessage {
-  channelId: Types.ObjectId;
+  _id: Types.ObjectId;
+  channelId?: Types.ObjectId;
+  conversationId?: Types.ObjectId;
+  threadId?: Types.ObjectId;
   user: Types.ObjectId;
   content: string;
-  threadId?: Types.ObjectId;
-  attachments?: string[];
+  type: 'channel' | 'conversation' | 'thread';
+  attachments?: Array<{
+    url: string;
+    type: string;
+    name: string;
+  }>;
   status: 'sent' | 'delivered' | 'read';
 }
 
@@ -46,26 +53,25 @@ export class MessageService {
     return message;
   }
 
-  async getChannelMessages(
+  static async getChannelMessages(
     channelId: string,
-    limit: number = 50,
-    before?: Date
-  ): Promise<any[]> {
-    try {
-      const query = before 
-        ? { channelId, createdAt: { $lt: before } }
-        : { channelId };
+    limit: number = 30,
+    before?: string
+  ): Promise<IMessage[]> {
+    const query: any = {
+      channelId: new Types.ObjectId(channelId),
+      type: 'channel'
+    };
 
-      return await Message.find(query)
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .populate('user', '_id username displayName avatarUrl')
-        .populate('reactions', '_id emoji user')
-        .exec();
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      throw error;
+    if (before) {
+      query._id = { $lt: new Types.ObjectId(before) };
     }
+
+    return Message.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate('user', 'displayName username avatarUrl')
+      .lean();
   }
 
   async updateMessageStatus(
@@ -109,6 +115,29 @@ export class MessageService {
       console.error('Error deleting message:', error);
       throw error;
     }
+  }
+
+  static async createThreadReply(
+    channelId: string,
+    parentMessageId: string,
+    userId: string,
+    content: string,
+    type: 'channel'
+  ): Promise<IMessage | null> {
+    const message = await Message.create({
+      content,
+      type: 'thread',
+      channelId: new Types.ObjectId(channelId),
+      threadId: new Types.ObjectId(parentMessageId),
+      user: new Types.ObjectId(userId),
+      status: 'sent'
+    }) as IMessage;
+
+    const populatedMessage = await Message.findById(message._id)
+      .populate('user', 'displayName username avatarUrl')
+      .lean() as IMessage | null;
+
+    return populatedMessage;
   }
 }
 

@@ -1,12 +1,16 @@
 // src/models/Message.ts
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
+export type MessageType = 'channel' | 'conversation' | 'thread';
+
 export interface IMessage extends Document {
   _id: Types.ObjectId;
   content: string;
-  channelId: Types.ObjectId;
-  user: Types.ObjectId;
   threadId?: Types.ObjectId;
+  type: MessageType;
+  channelId?: Types.ObjectId;
+  conversationId?: Types.ObjectId;
+  user: Types.ObjectId;
   attachments: Array<{
     url: string;
     type: string;
@@ -32,10 +36,24 @@ const MessageSchema = new Schema({
     required: true,
     maxlength: 4000
   },
+  type: {
+    type: String,
+    enum: ['channel', 'conversation', 'thread'],
+    required: true
+  },
   channelId: { 
     type: Schema.Types.ObjectId, 
-    ref: 'Channel', 
-    required: true 
+    ref: 'Channel',
+    required: function(this: any) {
+      return this.type === 'channel';
+    }
+  },
+  conversationId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Conversation',
+    required: function(this: any) {
+      return this.type === 'conversation';
+    }
   },
   user: { 
     type: Schema.Types.ObjectId, 
@@ -66,7 +84,7 @@ const MessageSchema = new Schema({
       type: Date, 
       default: Date.now 
     }
-  }]
+  }],
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -89,8 +107,8 @@ MessageSchema.pre('findOne', function() {
 });
 
 // Indexes for query optimization
-MessageSchema.index({ channelId: 1, createdAt: 1 });
-MessageSchema.index({ threadId: 1, createdAt: 1 });
-MessageSchema.index({ user: 1 }); // Changed from senderId to user to match schema
+MessageSchema.index({ conversationId: 1, createdAt: -1 });
+MessageSchema.index({ channelId: 1, createdAt: -1 });
+MessageSchema.index({ type: 1 });
 
 export default mongoose.model<IMessage>('Message', MessageSchema);

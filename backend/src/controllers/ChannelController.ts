@@ -4,7 +4,7 @@ import ChannelService from '../services/ChannelService';
 import UserService from '../services/UserService';
 import { Types } from 'mongoose';
 import WorkspaceService from '../services/WorkspaceService';
-import MessageService from "../services/MessageService";
+import { MessageService } from '../services/MessageService';
 
 export class ChannelController {
     static createChannel: RequestHandler = async (req, res, next): Promise<void> => {
@@ -69,8 +69,58 @@ export class ChannelController {
       static getChannelMessages: RequestHandler = async (req, res, next): Promise<void> => {
         try {
           const { channelId } = req.params;
-          const messages = await MessageService.getMessagesByChannelId(channelId);
+          const messages = await MessageService.getChannelMessages(channelId);
           res.json(messages);
+        } catch (error) {
+          next(error);
+        }
+      };
+
+      static getMessages: RequestHandler = async (req, res, next) => {
+        try {
+          const { channelId } = req.params;
+          const limit = parseInt(req.query.limit as string) || 30;
+          const before = req.query.before as string;
+
+          const messages = await MessageService.getChannelMessages(
+            channelId,
+            limit,
+            before
+          );
+
+          res.json({
+            messages,
+            nextCursor: messages.length === limit ? messages[messages.length - 1]._id : null
+          });
+        } catch (error) {
+          next(error);
+        }
+      };
+
+      static replyToMessage: RequestHandler = async (req, res, next) => {
+        try {
+          const { channelId, messageId } = req.params;
+          const { content } = req.body;
+          const auth0Id = req.auth?.payload.sub;
+
+          if (!auth0Id || !content) {
+            return res.status(400).json({ error: 'Missing required fields' });
+          }
+
+          const user = await UserService.getUserByAuth0Id(auth0Id);
+          if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+          }
+
+          const reply = await MessageService.createThreadReply(
+            channelId,
+            messageId,
+            user._id.toString(),
+            content,
+            'channel'
+          );
+
+          res.status(201).json(reply);
         } catch (error) {
           next(error);
         }

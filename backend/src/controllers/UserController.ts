@@ -15,7 +15,7 @@ const auth0 = new ManagementClient({
 export class UserController {
   static createUser: RequestHandler = async (req: Request, res: Response) => {
     try {
-      const { auth0Id, email, displayName, avatarUrl } = req.body;
+      const { auth0Id, email, displayName, avatarUrl, nickname, picture } = req.body;
 
       // Validate required fields
       if (!auth0Id || !email) {
@@ -26,8 +26,8 @@ export class UserController {
       const user = await UserService.createUser({
         auth0Id,
         email,
-        displayName,
-        avatarUrl,
+        displayName: displayName || nickname,
+        avatarUrl: avatarUrl || picture,
         isVerified: true,
         accountStatus: 'active'
       });
@@ -85,6 +85,26 @@ export class UserController {
         auth0User: auth0User.data,
         workspace,
         invites
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static getUsers: RequestHandler = async (req, res, next) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const lastId = req.query.lastId as string;
+      const search = req.query.search as string;
+
+      const users = await UserService.getUsers(limit, lastId, search);
+      
+      // Send the last ID for next pagination request
+      const lastUser = users[users.length - 1];
+      
+      res.json({
+        users,
+        nextCursor: users.length === limit ? lastUser?._id : null
       });
     } catch (error) {
       next(error);

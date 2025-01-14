@@ -153,6 +153,33 @@ class UserService {
 
     return user;
   }
+
+  async getUsers(
+    limit: number = 10,
+    lastId?: string,
+    search?: string
+  ): Promise<IUser[]> {
+    const query: any = {};
+    
+    // Add _id condition for pagination
+    if (lastId) {
+      query._id = { $lt: new Types.ObjectId(lastId) };
+    }
+
+    // Add search condition if provided
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { displayName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    return User.find(query)
+      .sort({ _id: -1 })
+      .limit(limit)
+      .select('displayName username avatarUrl email userStatus');
+  }
 }
 
 export default new UserService();
