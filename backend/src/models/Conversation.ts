@@ -9,6 +9,7 @@ export interface IConversation extends Document {
   messageCount: number;
   createdAt: Date;
   updatedAt: Date;
+  type: string;
 }
 
 const ConversationSchema = new Schema({
@@ -33,6 +34,11 @@ const ConversationSchema = new Schema({
   messageCount: {
     type: Number,
     default: 0
+  },
+  type: {
+    type: String,
+    enum: ['conversation', 'bot'],
+    default: 'conversation'
   }
 }, {
   timestamps: true,

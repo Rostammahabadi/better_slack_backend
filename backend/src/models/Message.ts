@@ -98,14 +98,6 @@ MessageSchema.virtual('reactions', {
   options: { sort: { createdAt: 1 } }
 });
 
-MessageSchema.pre('find', function() {
-  this.sort({ createdAt: 1 });
-});
-
-MessageSchema.pre('findOne', function() {
-  this.sort({ createdAt: 1 });
-});
-
 // Indexes for query optimization
 MessageSchema.index({ conversationId: 1, createdAt: -1 });
 MessageSchema.index({ channelId: 1, createdAt: -1 });

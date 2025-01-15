@@ -3,15 +3,16 @@ import { Types } from 'mongoose';
 import Message from '../models/Message';
 import Redis from 'ioredis';
 import { redisClient } from '../config/redis';
+import Channel from '../models/Channel';
 
 export interface IMessage {
   _id: Types.ObjectId;
   channelId?: Types.ObjectId;
   conversationId?: Types.ObjectId;
-  threadId?: Types.ObjectId;
+  threadParentId?: Types.ObjectId;
   user: Types.ObjectId;
   content: string;
-  type: 'channel' | 'conversation' | 'thread';
+  type: 'channel' | 'conversation' | 'thread' | 'bot';
   attachments?: Array<{
     url: string;
     type: string;
@@ -27,16 +28,34 @@ export class MessageService {
     this.redis = redisClient;
   }
 
-  async createMessage(channelId: string, messageData: IMessage): Promise<any> {
+  async createMessage(channelId: string, messageData: any): Promise<any> {
+    console.log('Creating message with data:', messageData);
+    
     const message = await Message.create({ 
-        ...messageData, 
-        channelId: new Types.ObjectId(channelId)
+      ...messageData,
+      channelId: new Types.ObjectId(channelId),
+      user: new Types.ObjectId(messageData.user)
     });
 
-    const populatedMessage = await Message.findById(message._id)
-        .populate('user', '_id username displayName avatarUrl')
-        .populate('reactions', '_id emoji user');
+    console.log('Created message:', message);
 
+    // Update channel with new message
+    await Channel.findByIdAndUpdate(
+      channelId,
+      {
+        $push: { messages: message._id },
+        $set: { lastMessage: message._id, lastMessageAt: new Date() },
+        $inc: { messageCount: 1 }
+      },
+      { new: true }
+    );
+
+    const populatedMessage = await Message.findById(message._id)
+      .populate('user', '_id username displayName avatarUrl')
+      .populate('reactions', '_id emoji user')
+      .lean();
+
+    console.log('Returning populated message:', populatedMessage);
     return populatedMessage;
   }
 
@@ -67,18 +86,30 @@ export class MessageService {
       query._id = { $lt: new Types.ObjectId(before) };
     }
 
-    return Message.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .populate('user', 'displayName username avatarUrl')
-      .populate({
-        path: 'reactions',
-        populate: {
-          path: 'user',
-          select: 'displayName username avatarUrl'
+    const messages = await Message.aggregate([
+      { $match: query },
+      { $sort: { createdAt: -1 } },  // -1 for newest first, 1 for oldest first
+      { $limit: limit },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user',
+          foreignField: '_id',
+          as: 'user'
         }
-      })
-      .lean();
+      },
+      { $unwind: '$user' },
+      {
+        $lookup: {
+          from: 'reactions',
+          localField: '_id',
+          foreignField: 'messageId',
+          as: 'reactions'
+        }
+      }
+    ]);
+
+    return messages;
   }
 
   async updateMessageStatus(

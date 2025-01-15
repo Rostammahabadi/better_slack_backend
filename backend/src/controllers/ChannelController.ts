@@ -80,12 +80,10 @@ export class ChannelController {
         try {
           const { channelId } = req.params;
           const limit = parseInt(req.query.limit as string) || 30;
-          const before = req.query.before as string;
 
           const messages = await MessageService.getChannelMessages(
             channelId,
-            limit,
-            before
+            limit
           );
 
           res.json({

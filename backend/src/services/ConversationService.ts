@@ -79,15 +79,12 @@ class ConversationService {
     return populatedMessage;
   }
 
-  static async getRecentConversations(
-    userId: string,
-    limit: number = 20
-  ): Promise<IConversation[]> {
+  static async getRecentConversations(userId: string): Promise<IConversation[]> {
     return Conversation.find({
-      participants: new Types.ObjectId(userId)
+      participants: new Types.ObjectId(userId),
+      type: { $ne: 'bot' }
     })
     .sort({ lastMessageAt: -1 })
-    .limit(limit)
     .populate('lastMessage')
     .populate('participants', 'displayName avatarUrl')
     .populate({

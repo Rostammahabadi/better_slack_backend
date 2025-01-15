@@ -15,6 +15,7 @@ import inviteRoutes from './routes/inviteRoutes';
 
 import dotenv from 'dotenv';
 import conversationRoutes from './routes/conversationRoutes';
+import chatbotRoutes from './routes/chatbotRoutes';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -45,6 +46,7 @@ class APIServer {
     this.app.use('/register', userRoutes);
     this.app.use('/api/messages',messageRateLimiter, authenticate, messageRoutes);
     this.app.use('/api/channels', authenticate, channelRoutes);
+    this.app.use('/api/chatbot', authenticate, chatbotRoutes);
     this.app.use('/api/workspaces', rateLimiter, authenticate, workspaceRoutes);
     this.app.use('/api/conversations', authenticate, conversationRoutes);
     this.app.use('/api', rateLimiter, authenticate, reactionRoutes);
