@@ -71,6 +71,13 @@ export class MessageService {
       .sort({ createdAt: -1 })
       .limit(limit)
       .populate('user', 'displayName username avatarUrl')
+      .populate({
+        path: 'reactions',
+        populate: {
+          path: 'user',
+          select: 'displayName username avatarUrl'
+        }
+      })
       .lean();
   }
 
