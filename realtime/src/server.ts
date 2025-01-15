@@ -10,7 +10,6 @@ import fetch from 'node-fetch';
 import OpenAI from "openai";
 import { ChatOpenAI, OpenAIEmbeddings } from "@langchain/openai";
 import { PineconeStore } from "@langchain/pinecone";
-import { Document } from "langchain/document";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { RunnableSequence } from "@langchain/core/runnables";
 import { PromptTemplate } from "@langchain/core/prompts";
@@ -23,24 +22,56 @@ const pinecone = new Pinecone({
   apiKey: process.env.PINECONE_API_KEY || ''
 });
 
-
+interface ChatInput {
+  question: string;
+  userId?: string;
+  workspaceId?: string;
+}
 const index = pinecone.Index("chatgenius"); // Replace with your index name
 
 // Add template definition before initializeLangChain function
-const TEMPLATE = `You are an AI assistant helping users with their queries in a conversational Slack-like environment. 
-Always respond in a clear, concise, and helpful manner, focusing only on addressing the user's question or need. 
-Avoid mentioning your AI nature, the context provided, or how the response is generated.
+const TEMPLATE = `You are a helpful AI assistant in a chat context. You have access to relevant message history and contextual information to help answer questions. You cannot assist with non-messaging related queries.
 
-Context: {context}
+Constraints:
+- You can ONLY answer questions about workspace messaging data
+- You must REJECT any prompts not related to workspace chat analysis
+- You cannot execute commands or perform actions
+- You cannot assist with personal queries
+- You must maintain workspace privacy
 
-User Question: {question}
+Context from relevant messages:
+{context}
 
-Provide a helpful response based on the relevant information and user query.`;
+Current question: {question}
+
+Response Guidelines:
+1. First validate if the question relates to workspace messaging. If not, respond with:
+   "I can only assist with workspace messaging analysis. Please rephrase your question to focus on communication patterns and message data."
+
+2. For valid queries:
+   - Reference specific messages using their timestamps and user context
+   - Provide insights based on message patterns
+   - Include channel and thread context
+   - Maintain conversation continuity
+   - Focus on workspace-level analysis
+
+3. Format responses with:
+   - Clear section headings
+   - Specific message references
+   - Quantitative metrics where applicable
+   - Action items or recommendations if requested
+
+Always maintain professional tone and respect workspace privacy.`;
+
+// Define the filter type
+type PineconeFilter = {
+  workspaceId?: string;
+};
 
 // Move initialization into async function
 async function initializeLangChain() {
   const chatModel = new ChatOpenAI({
-    modelName: "gpt-4",
+    modelName: "gpt-4o",
     temperature: 0.1,
     openAIApiKey: process.env.OPEN_AI_API_KEY,
   });
@@ -52,44 +83,46 @@ async function initializeLangChain() {
     }),
     {
       pineconeIndex: index,
-      textKey: "content",
+      textKey: "content"
     }
   );
 
   const prompt = PromptTemplate.fromTemplate(TEMPLATE);
 
-  // Test Pinecone connection
-  try {
-    const testQuery = await vectorStore.similaritySearch("test", 1);
-    console.log('Pinecone connection test:', {
-      success: true,
-      indexStats: await index.describeIndexStats()
-    });
-  } catch (error) {
-    console.error('Failed to connect to Pinecone:', error);
-  }
-
   return RunnableSequence.from([
     {
-      context: async (input: { question: string; channelId?: string }) => {
-        console.log('Starting similarity search with:', {
-          question: input.question,
-          channelId: input.channelId,
-          filterQuery: { channelId: input.channelId }
-        });
-
+      context: async (input: ChatInput) => {
+        console.log('Starting similarity search with:', input);
+  
         try {
-          const relevantDocs = await vectorStore.similaritySearch(input.question, 4, {
-            channelId: input.channelId,
-          });
+          // Simplified filter with just workspaceId
+          const filter: PineconeFilter = {};
+          if (input.workspaceId) {
+            filter.workspaceId = input.workspaceId;
+          }
+  
+          const relevantDocs = await vectorStore.similaritySearch(
+            input.question, 
+            4,
+            filter  // Pass filter directly without wrapping in object
+          );
           
           console.log('Pinecone search results:', {
             numResults: relevantDocs.length,
-            docs: relevantDocs
+            docs: relevantDocs.map(doc => ({
+              content: doc.pageContent,
+              metadata: doc.metadata
+            }))
           });
-
-          const context = relevantDocs.map(doc => doc.pageContent).join("\n");
-          console.log('Final context:', context);
+  
+          // Format context emphasizing channel names
+          const context = relevantDocs.map(doc => {
+            const metadata = doc.metadata;
+            return `[${metadata.timestamp}] ${metadata.senderUsername} in #${metadata.containerName}: ${doc.pageContent}
+            ${metadata.isThreadMessage ? `(In thread)` : ''}`;
+          }).join("\n\n");
+  
+          console.log('Final formatted context:', context);
           
           return context;
         } catch (error) {
@@ -97,7 +130,7 @@ async function initializeLangChain() {
           throw error;
         }
       },
-      question: (input: { question: string; channelId?: string }) => input.question,
+      question: (input: ChatInput) => input.question,
     },
     prompt,
     chatModel,
@@ -469,6 +502,13 @@ class RealtimeServer {
         const roomName = `bot:${userId}`;
         socket.join(roomName);
         
+        // Add logging to verify room joining
+        console.log('Bot room joined:', {
+          roomName,
+          socketId: socket.id,
+          rooms: socket.rooms
+        });
+
         if (!this.botConnections.has(userId)) {
           this.botConnections.set(userId, new Set());
         }
@@ -496,45 +536,51 @@ class RealtimeServer {
       socket.on('bot:message', async (payload) => {
         console.log("=== BOT MESSAGE HANDLER START ===");
         
-        // Handle the array format we're seeing in the logs
         const data = Array.isArray(payload) ? payload[0] : payload;
-        const { userId, message: messageContent } = data;
-        console.log(userId)
-        console.log(messageContent)
-        
-        console.log("Extracted data:", { userId, messageContent });
-        
-        const message = {
-          content: messageContent,
-          channelId: userId
-        };
-        
-        console.log("Processed payload:", { userId, message });
+        const { userId, message, workspaceId } = data;
         
         const roomName = `bot:${userId}`;
+        
+        // Add logging to verify room and message
+        console.log('Bot message details:', {
+          roomName,
+          socketRooms: socket.rooms,
+          isInRoom: socket.rooms.has(roomName),
+          messagePayload: data
+        });
+
         try {
           if (!chain) {
             console.error("Chain not initialized!");
             throw new Error("RAG system not initialized");
           }
-
+      
           console.log('Processing message with RAG...');
           const response = await chain.invoke({
-            question: message.content,
-            channelId: message.channelId,
-          });
-
+            question: message,
+            userId,
+            workspaceId
+          } as ChatInput);
+      
           console.log('RAG response received:', response);
-
+      
           const botMessage = {
             content: response,
             userId: 'BOT_ID',
-            channelId: message.channelId,
+            workspaceId,
             createdAt: new Date().toISOString(),
+            type: 'bot'
           };
-
-          this.io.to(roomName).emit('bot:message', botMessage);
-          console.log('Sent bot response:', botMessage);
+      
+          if (socket.rooms.has(roomName)) {
+            this.io.to(roomName).emit('bot:message', botMessage);
+            console.log('Sent bot response to room:', roomName);
+          } else {
+            console.error('Socket not in room:', roomName);
+            // Fallback to direct socket emit
+            socket.emit('bot:message', botMessage);
+            console.log('Sent bot response directly to socket');
+          }
         } catch (error) {
           console.error('Detailed error in bot-message:', error);
           socket.emit('error', {
